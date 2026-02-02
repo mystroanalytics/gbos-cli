@@ -313,14 +313,20 @@ async function connectCommand(options) {
 
     // Try to get account name from session API if not stored
     let accountName = session.account_name;
-    if (!accountName) {
+    if (!accountName || accountName.startsWith('Account ')) {
       try {
         const sessionInfo = await api.getSession();
-        accountName = sessionInfo.data?.account?.name || `Account ${session.account_id}`;
+        accountName = sessionInfo.data?.account?.name || session.account_name || `Account ${session.account_id}`;
       } catch (e) {
-        accountName = `Account ${session.account_id}`;
+        // Keep existing account_name or fallback
       }
     }
+
+    // Get application name - prefer from node's embedded application, then selectedApplication
+    const applicationName = node.application?.name ||
+      selectedNode.application?.name ||
+      selectedApplication?.name ||
+      'N/A';
 
     // Save connection to session
     config.saveConnection({
@@ -331,11 +337,11 @@ async function connectCommand(options) {
         name: node.name,
         node_type: node.node_type,
         system_prompt: node.system_prompt,
-        application_id: selectedNode.application_id,
+        application_id: node.application_id || selectedNode.application_id,
       },
       application: {
-        id: selectedApplication?.id,
-        name: selectedApplication?.name,
+        id: node.application?.id || selectedApplication?.id,
+        name: applicationName,
       },
       connected_at: new Date().toISOString(),
       working_directory: workingDirectory,
@@ -346,7 +352,7 @@ async function connectCommand(options) {
     // Display success with logo and summary
     displayConnectSuccess({
       accountName: accountName,
-      applicationName: selectedApplication?.name || 'N/A',
+      applicationName: applicationName,
       nodeName: node.name,
     });
 
