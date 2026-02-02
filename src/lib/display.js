@@ -261,90 +261,28 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5, options = 
   }
 }
 
-function applyAlphaThreshold(png, alphaThreshold) {
-  if (!alphaThreshold) return png;
-  for (let i = 0; i < png.data.length; i += 4) {
-    if (png.data[i + 3] < alphaThreshold) {
-      png.data[i + 3] = 0;
-    }
-  }
-  return png;
-}
-
-function preparePngForRender(imagePath, options = {}) {
-  const { alphaThreshold, crop, cropAlphaThreshold } = options;
-  const data = fs.readFileSync(imagePath);
-  let png = PNG.sync.read(data);
-  if (alphaThreshold) {
-    png = applyAlphaThreshold(png, alphaThreshold);
-  }
-  if (crop) {
-    png = cropPng(png, cropAlphaThreshold ?? alphaThreshold ?? 1);
-  }
-  return PNG.sync.write(png);
-}
-
 async function displayImage(imagePath, options = {}) {
-  const fallbackWidth = options.fallbackWidth === undefined ? 40 : options.fallbackWidth;
-  const fallbackHeight = options.fallbackHeight === undefined ? 12 : options.fallbackHeight;
+  const width = options.fallbackWidth ?? options.width ?? 40;
+  const height = options.fallbackHeight ?? options.height ?? 12;
   const sharp = options.sharp ?? false;
   const alphaThreshold = options.alphaThreshold ?? 50;
   const crop = options.crop ?? false;
   const cropAlphaThreshold = options.cropAlphaThreshold;
   const backgroundLuminance = options.backgroundLuminance ?? 240;
-  const useProcessedBuffer = crop || sharp;
-  const renderOptions = { ...options };
-  delete renderOptions.fallbackWidth;
-  delete renderOptions.fallbackHeight;
-  delete renderOptions.sharp;
-  delete renderOptions.alphaThreshold;
-  delete renderOptions.crop;
-  delete renderOptions.cropAlphaThreshold;
-  delete renderOptions.backgroundLuminance;
 
-  try {
-    let supportsGraphics = false;
-    try {
-      const supportsTerminalGraphics = await import('supports-terminal-graphics');
-      const graphics = supportsTerminalGraphics.default || supportsTerminalGraphics;
-      supportsGraphics = Boolean(
-        graphics?.stdout?.kitty || graphics?.stdout?.iterm2 || graphics?.stdout?.sixel,
-      );
-    } catch {
-      supportsGraphics = false;
-    }
-
-    if (supportsGraphics) {
-      const terminalImage = await import('terminal-image');
-      const renderer = terminalImage.default || terminalImage;
-      const buffer = useProcessedBuffer
-        ? preparePngForRender(imagePath, { alphaThreshold, crop, cropAlphaThreshold })
-        : null;
-      const output = buffer
-        ? await renderer.buffer(buffer, renderOptions)
-        : await renderer.file(imagePath, renderOptions);
-      process.stdout.write(output);
-      if (!output.endsWith('\n')) process.stdout.write('\n');
-      return true;
-    }
-  } catch (error) {
-    // Fall through to ANSI fallback
-  }
-
-  const fallbackLines = imageToPixels(imagePath, fallbackWidth, fallbackHeight, {
+  const lines = imageToPixels(imagePath, width, height, {
     sampleMode: sharp ? 'nearest' : 'coverage',
     alphaThreshold,
     backgroundLuminance,
     crop,
     cropAlphaThreshold: cropAlphaThreshold ?? alphaThreshold,
   });
-  if (!fallbackLines) {
+  if (!lines) {
     throw new Error('Unable to render image.');
   }
   console.log('');
-  fallbackLines.forEach((line) => console.log(line));
+  lines.forEach((line) => console.log(line));
   console.log('');
-  return false;
 }
 
 
