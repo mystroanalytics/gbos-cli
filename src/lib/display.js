@@ -298,16 +298,16 @@ function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~16 chars wide, 7 rows tall with smooth edges
-  let logoLines = imageToPixels(logoPath, 16, 7, {
-    alphaThreshold: 200,
+  // Render logo at ~20 chars wide, 8 rows tall with smooth edges and dots
+  let logoLines = imageToPixels(logoPath, 20, 8, {
+    alphaThreshold: 180,
     crop: true,
-    cropAlphaThreshold: 200,
+    cropAlphaThreshold: 180,
     sampleMode: 'coverage',
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 22; // Account for escape codes
+  const logoWidth = 26; // Account for escape codes
 
   // Build right side - Claude Code style (clean lines, no boxes)
   const rightLines = [];
@@ -342,15 +342,15 @@ function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 16, 7, {
-    alphaThreshold: 200,
+  let logoLines = imageToPixels(logoPath, 20, 8, {
+    alphaThreshold: 180,
     crop: true,
-    cropAlphaThreshold: 200,
+    cropAlphaThreshold: 180,
     sampleMode: 'coverage',
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 22;
+  const logoWidth = 26;
 
   const rightLines = [];
   rightLines.push(`${BOLD}${colors.purple5}gbos.io${RESET} ${DIM}v${version}${RESET}`);
