@@ -2,7 +2,7 @@ const path = require('path');
 const { displayImage, getTerminalWidth } = require('../lib/display');
 
 async function logoCommand() {
-  const logoPath = path.join(__dirname, '../../images/logo-2.png');
+  const logoPath = path.join(__dirname, '../../images/logo-2-clean.png');
   const terminalWidth = getTerminalWidth();
   const targetWidth = Math.min(120, Math.max(40, terminalWidth - 4));
 

@@ -357,11 +357,16 @@ const COMPACT_LOGO = [
 
 // Display logo with connection details (Claude Code style - clean, minimal)
 function displayLogoWithDetails(details = null) {
-  const logoPath = path.join(__dirname, '../../images/logo-2.png');
+  const logoPath = path.join(__dirname, '../../images/logo-2-clean.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~20 chars wide, 5 rows tall (smooth edges)
-  let logoLines = imageToPixels(logoPath, 20, 5);
+  // Render logo at ~20 chars wide, 5 rows tall with high alpha threshold
+  let logoLines = imageToPixels(logoPath, 20, 5, {
+    alphaThreshold: 220,
+    crop: true,
+    cropAlphaThreshold: 220,
+    sampleMode: 'nearest',
+  });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
   const logoWidth = 28; // Account for escape codes
@@ -396,10 +401,15 @@ function displayLogo() {
 }
 
 function displayAuthSuccess(data) {
-  const logoPath = path.join(__dirname, '../../images/logo-2.png');
+  const logoPath = path.join(__dirname, '../../images/logo-2-clean.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 20, 5);
+  let logoLines = imageToPixels(logoPath, 20, 5, {
+    alphaThreshold: 220,
+    crop: true,
+    cropAlphaThreshold: 220,
+    sampleMode: 'nearest',
+  });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
   const logoWidth = 28;
