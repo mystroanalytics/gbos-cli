@@ -1,6 +1,7 @@
 const { execSync, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { PNG } = require('pngjs');
 
 // ANSI color codes - Dark Purple Theme
 const colors = {
@@ -23,21 +24,70 @@ const colors = {
   yellow: '\x1b[33m',
 };
 
-// ASCII art horse head + GBOS logo combined
-const ASCII_LOGO = `
-${colors.purple2}${colors.bold}                  ╱▔╲
-${colors.purple3}               ╱▔   ╲▁▁
-${colors.purple3}              ▕       ╲╲       ${colors.purple4}██████╗ ██████╗  ██████╗ ███████╗
-${colors.purple4}              ▕   ●    ╲╲     ${colors.purple4}██╔════╝ ██╔══██╗██╔═══██╗██╔════╝
-${colors.purple4}               ╲        ╱╱     ${colors.purple5}██║  ███╗██████╔╝██║   ██║███████╗
-${colors.purple5}                ╲╲    ╱╱       ${colors.purple5}██║   ██║██╔══██╗██║   ██║╚════██║
-${colors.purple5}            ▁▁▁▁╱ ╲▁▁╱         ${colors.purple6}╚██████╔╝██████╔╝╚██████╔╝███████║
-${colors.purple6}           ╱                   ${colors.purple6} ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝
-${colors.purple6}          ╱    ╲
-${colors.purple7}         ▕      ▏
-${colors.reset}`;
+// ASCII characters from dark to light
+const ASCII_CHARS = ' .:-=+*#%@';
 
-// Simpler horse ASCII for smaller displays
+// Convert image to ASCII art
+function imageToAscii(imagePath, width = 30) {
+  try {
+    const data = fs.readFileSync(imagePath);
+    const png = PNG.sync.read(data);
+
+    const aspectRatio = 0.5; // Terminal characters are taller than wide
+    const height = Math.floor((png.height / png.width) * width * aspectRatio);
+
+    const cellWidth = png.width / width;
+    const cellHeight = png.height / height;
+
+    let ascii = '';
+
+    for (let y = 0; y < height; y++) {
+      let row = '';
+      for (let x = 0; x < width; x++) {
+        // Sample the center of each cell
+        const sampleX = Math.floor(x * cellWidth + cellWidth / 2);
+        const sampleY = Math.floor(y * cellHeight + cellHeight / 2);
+        const idx = (png.width * sampleY + sampleX) << 2;
+
+        const r = png.data[idx];
+        const g = png.data[idx + 1];
+        const b = png.data[idx + 2];
+        const a = png.data[idx + 3];
+
+        // If transparent, use space
+        if (a < 128) {
+          row += ' ';
+          continue;
+        }
+
+        // Calculate brightness (0-255)
+        const brightness = (r + g + b) / 3;
+        // Map to ASCII character (inverted - darker pixels = denser characters)
+        const charIndex = Math.floor((1 - brightness / 255) * (ASCII_CHARS.length - 1));
+        row += ASCII_CHARS[charIndex];
+      }
+      ascii += row + '\n';
+    }
+
+    return ascii;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Color the ASCII art with purple gradient based on position
+function colorAsciiArt(ascii, startColor = colors.purple2, endColor = colors.purple6) {
+  const lines = ascii.split('\n').filter(line => line.trim());
+  const purpleGradient = [colors.purple2, colors.purple3, colors.purple4, colors.purple5, colors.purple6];
+
+  return lines.map((line, i) => {
+    const colorIndex = Math.floor((i / lines.length) * purpleGradient.length);
+    const color = purpleGradient[Math.min(colorIndex, purpleGradient.length - 1)];
+    return color + line + colors.reset;
+  }).join('\n');
+}
+
+// ASCII art horse head + GBOS logo combined (fallback)
 const ASCII_LOGO_SIMPLE = `
 ${colors.purple3}${colors.bold}        ▄▀▀▀▄▄
 ${colors.purple3}      ▄▀      ▀▄        ${colors.purple4}██████╗ ██████╗  ██████╗ ███████╗
@@ -49,6 +99,14 @@ ${colors.purple6}   █   █               ${colors.purple6} ╚═════
 ${colors.purple6}   █   █
 ${colors.reset}`;
 
+// GBOS text only
+const GBOS_TEXT = `${colors.purple4}${colors.bold}██████╗ ██████╗  ██████╗ ███████╗
+${colors.purple4}██╔════╝ ██╔══██╗██╔═══██╗██╔════╝
+${colors.purple5}██║  ███╗██████╔╝██║   ██║███████╗
+${colors.purple5}██║   ██║██╔══██╗██║   ██║╚════██║
+${colors.purple6}╚██████╔╝██████╔╝╚██████╔╝███████║
+${colors.purple6} ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝${colors.reset}`;
+
 // Check if catimg is available
 function hasCatimg() {
   try {
@@ -59,34 +117,35 @@ function hasCatimg() {
   }
 }
 
-// Display logo using catimg or ASCII fallback
+// Display logo using image-to-ascii or ASCII fallback
 function displayLogo() {
   const logoPath = path.join(__dirname, '../../images/logo.png');
 
-  if (hasCatimg() && fs.existsSync(logoPath)) {
-    try {
-      // Use catimg with width constraint for terminal
-      const result = spawnSync('catimg', ['-w', '40', logoPath], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-      if (result.stdout) {
-        console.log(result.stdout);
-        // Print GBOS text next to it
-        console.log(`${colors.purple4}${colors.bold}   ██████╗ ██████╗  ██████╗ ███████╗`);
-        console.log(`${colors.purple4}  ██╔════╝ ██╔══██╗██╔═══██╗██╔════╝`);
-        console.log(`${colors.purple5}  ██║  ███╗██████╔╝██║   ██║███████╗`);
-        console.log(`${colors.purple5}  ██║   ██║██╔══██╗██║   ██║╚════██║`);
-        console.log(`${colors.purple6}  ╚██████╔╝██████╔╝╚██████╔╝███████║`);
-        console.log(`${colors.purple6}   ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝${colors.reset}`);
-        return;
+  // Try to convert image to ASCII
+  if (fs.existsSync(logoPath)) {
+    const ascii = imageToAscii(logoPath, 25);
+    if (ascii) {
+      // Color the ASCII art
+      const coloredAscii = colorAsciiArt(ascii);
+      const asciiLines = coloredAscii.split('\n');
+      const gbosLines = GBOS_TEXT.split('\n');
+
+      // Combine horse ASCII and GBOS text side by side
+      console.log('');
+      const maxLines = Math.max(asciiLines.length, gbosLines.length);
+      for (let i = 0; i < maxLines; i++) {
+        const asciiLine = asciiLines[i] || '';
+        const gbosLine = gbosLines[i - Math.floor((maxLines - gbosLines.length) / 2)] || '';
+        // Pad ASCII line to consistent width
+        const paddedAscii = asciiLine.padEnd(35);
+        console.log(`  ${paddedAscii}  ${gbosLine}`);
       }
-    } catch (e) {
-      // Fall through to ASCII
+      console.log('');
+      return;
     }
   }
 
-  // ASCII fallback with horse icon
+  // Fallback to manual ASCII horse
   console.log(ASCII_LOGO_SIMPLE);
 }
 
@@ -220,4 +279,5 @@ module.exports = {
   displayConnectSuccess,
   displayMessageBox,
   hasCatimg,
+  imageToAscii,
 };
