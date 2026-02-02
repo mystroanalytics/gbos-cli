@@ -1,6 +1,61 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
 const { displayMessageBox, printBanner, printStatusTable, fg, LOGO_LIGHT, LOGO_NAVY, RESET, BOLD, DIM, getTerminalWidth } = require('../lib/display');
+const readline = require('readline');
+
+// Colors for prompts
+const CYAN = '\x1b[36m';
+const YELLOW = '\x1b[33m';
+const GREEN = '\x1b[32m';
+
+// Create readline interface for interactive prompts
+function createReadlineInterface() {
+  return readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+}
+
+// Prompt for text input
+async function promptText(rl, question, defaultValue = '') {
+  return new Promise((resolve) => {
+    const defaultStr = defaultValue ? ` ${DIM}(${defaultValue})${RESET}` : '';
+    rl.question(`  ${CYAN}?${RESET} ${question}${defaultStr}: `, (answer) => {
+      resolve(answer.trim() || defaultValue);
+    });
+  });
+}
+
+// Prompt for yes/no
+async function promptYesNo(rl, question, defaultValue = false) {
+  return new Promise((resolve) => {
+    const defaultStr = defaultValue ? 'Y/n' : 'y/N';
+    rl.question(`  ${CYAN}?${RESET} ${question} ${DIM}(${defaultStr})${RESET}: `, (answer) => {
+      const lower = answer.trim().toLowerCase();
+      if (lower === '') resolve(defaultValue);
+      else resolve(lower === 'y' || lower === 'yes');
+    });
+  });
+}
+
+// Prompt for selection from list
+async function promptSelect(rl, question, options) {
+  console.log(`\n  ${CYAN}?${RESET} ${question}`);
+  options.forEach((opt, i) => {
+    console.log(`    ${DIM}${i + 1}.${RESET} ${opt.label || opt}`);
+  });
+
+  return new Promise((resolve) => {
+    rl.question(`  ${DIM}Enter number (1-${options.length})${RESET}: `, (answer) => {
+      const num = parseInt(answer.trim(), 10);
+      if (num >= 1 && num <= options.length) {
+        resolve(options[num - 1].value || options[num - 1]);
+      } else {
+        resolve(options[0].value || options[0]);
+      }
+    });
+  });
+}
 
 // Format task for display
 function formatTask(task, index) {
@@ -120,6 +175,12 @@ async function tasksCommand() {
     console.log(`${DIM}  Total: ${tasks.length} task(s)${RESET}\n`);
 
   } catch (error) {
+    if (error.status === 404 || error.message?.includes('not found')) {
+      console.log(`${DIM}No tasks assigned to this node.${RESET}\n`);
+      console.log(`${DIM}Note: The tasks endpoint may not be implemented yet on the server.${RESET}`);
+      console.log(`${DIM}Required API: GET /api/v1/cli/tasks${RESET}\n`);
+      return;
+    }
     displayMessageBox('Error', error.message, 'error');
     process.exit(1);
   }
@@ -344,11 +405,203 @@ async function autoCommand() {
   await runLoop();
 }
 
+// Add task command - interactive task creation
+async function addTaskCommand() {
+  if (!config.isAuthenticated()) {
+    displayMessageBox('Not Authenticated', 'Please run "gbos auth" first.', 'warning');
+    process.exit(1);
+  }
+
+  const connection = config.getConnection();
+  if (!connection) {
+    displayMessageBox('Not Connected', 'Please run "gbos connect" first.', 'warning');
+    process.exit(1);
+  }
+
+  const rl = createReadlineInterface();
+
+  console.log(`\n${BOLD}Create New Task${RESET}`);
+  console.log(`${DIM}Fill in the task details below. Press Enter to use defaults.${RESET}\n`);
+
+  try {
+    // Required fields
+    const title = await promptText(rl, 'Task title', '');
+    if (!title) {
+      console.log(`\n${DIM}Task title is required. Cancelled.${RESET}\n`);
+      rl.close();
+      return;
+    }
+
+    const description = await promptText(rl, 'Description (what needs to be done)', '');
+
+    // Priority selection
+    const priority = await promptSelect(rl, 'Priority level:', [
+      { label: 'Low', value: 'low' },
+      { label: 'Normal', value: 'normal' },
+      { label: 'High', value: 'high' },
+      { label: 'Urgent', value: 'urgent' },
+    ]);
+
+    // Task type
+    const taskType = await promptSelect(rl, 'Task type:', [
+      { label: 'Feature - New functionality', value: 'feature' },
+      { label: 'Bug Fix - Fix an issue', value: 'bug' },
+      { label: 'Refactor - Improve code', value: 'refactor' },
+      { label: 'Documentation - Update docs', value: 'docs' },
+      { label: 'Test - Add/update tests', value: 'test' },
+      { label: 'Other', value: 'other' },
+    ]);
+
+    // Prompt/instructions for coding agent
+    console.log(`\n  ${CYAN}?${RESET} Detailed instructions for the coding agent:`);
+    console.log(`    ${DIM}(Enter a blank line to finish)${RESET}`);
+
+    let prompt = '';
+    const promptLines = [];
+
+    const collectPrompt = () => {
+      return new Promise((resolve) => {
+        const askLine = () => {
+          rl.question('    ', (line) => {
+            if (line === '') {
+              resolve(promptLines.join('\n'));
+            } else {
+              promptLines.push(line);
+              askLine();
+            }
+          });
+        };
+        askLine();
+      });
+    };
+
+    prompt = await collectPrompt();
+
+    // Optional: Add attachments
+    const hasAttachments = await promptYesNo(rl, 'Add attachment URLs?', false);
+    const attachments = [];
+
+    if (hasAttachments) {
+      console.log(`  ${DIM}Enter attachment URLs (blank line to finish):${RESET}`);
+      let addingAttachments = true;
+      while (addingAttachments) {
+        const url = await promptText(rl, 'URL', '');
+        if (!url) {
+          addingAttachments = false;
+        } else {
+          const name = await promptText(rl, 'Name for this attachment', `Attachment ${attachments.length + 1}`);
+          attachments.push({ url, name });
+        }
+      }
+    }
+
+    // Optional: Add metadata
+    const hasMetadata = await promptYesNo(rl, 'Add custom metadata (JSON)?', false);
+    let metadata = {};
+
+    if (hasMetadata) {
+      const metadataStr = await promptText(rl, 'Enter JSON metadata', '{}');
+      try {
+        metadata = JSON.parse(metadataStr);
+      } catch (e) {
+        console.log(`  ${YELLOW}Warning: Invalid JSON, using empty metadata${RESET}`);
+      }
+    }
+
+    // Due date (optional)
+    const hasDueDate = await promptYesNo(rl, 'Set a due date?', false);
+    let dueDate = null;
+
+    if (hasDueDate) {
+      const dueDateStr = await promptText(rl, 'Due date (YYYY-MM-DD)', '');
+      if (dueDateStr && /^\d{4}-\d{2}-\d{2}$/.test(dueDateStr)) {
+        dueDate = dueDateStr;
+      }
+    }
+
+    rl.close();
+
+    // Build task data
+    const taskData = {
+      title,
+      description,
+      prompt: prompt || description,
+      priority,
+      task_type: taskType,
+      node_id: connection.node?.id,
+      application_id: connection.application?.id || connection.node?.application_id,
+    };
+
+    if (attachments.length > 0) {
+      taskData.attachments = attachments;
+    }
+
+    if (Object.keys(metadata).length > 0) {
+      taskData.metadata = metadata;
+    }
+
+    if (dueDate) {
+      taskData.due_date = dueDate;
+    }
+
+    // Show summary
+    console.log(`\n${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}`);
+    console.log(`${BOLD}  Task Summary${RESET}`);
+    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}\n`);
+    console.log(`  ${DIM}Title:${RESET} ${title}`);
+    console.log(`  ${DIM}Type:${RESET} ${taskType}`);
+    console.log(`  ${DIM}Priority:${RESET} ${priority}`);
+    if (description) console.log(`  ${DIM}Description:${RESET} ${description.substring(0, 50)}${description.length > 50 ? '...' : ''}`);
+    if (attachments.length > 0) console.log(`  ${DIM}Attachments:${RESET} ${attachments.length} file(s)`);
+    if (dueDate) console.log(`  ${DIM}Due date:${RESET} ${dueDate}`);
+    console.log('');
+
+    // Confirm and create
+    const rl2 = createReadlineInterface();
+    const confirm = await promptYesNo(rl2, 'Create this task?', true);
+    rl2.close();
+
+    if (!confirm) {
+      console.log(`\n${DIM}Task creation cancelled.${RESET}\n`);
+      return;
+    }
+
+    // Create task via API
+    console.log(`\n${DIM}Creating task...${RESET}`);
+
+    try {
+      const response = await api.createTask(taskData);
+      const task = response.data;
+
+      console.log(`\n${GREEN}✓${RESET} ${BOLD}Task created successfully!${RESET}`);
+      console.log(`  ${DIM}Task ID:${RESET} ${task.id || 'N/A'}`);
+      console.log(`  ${DIM}Status:${RESET} ${task.status || 'pending'}\n`);
+
+    } catch (error) {
+      if (error.status === 404 || error.message?.includes('not found')) {
+        console.log(`\n${YELLOW}Note:${RESET} The create task endpoint is not implemented yet.`);
+        console.log(`${DIM}Required API: POST /api/v1/cli/tasks${RESET}`);
+        console.log(`\n${DIM}Request body that would be sent:${RESET}`);
+        console.log(JSON.stringify(taskData, null, 2));
+        console.log('');
+      } else {
+        throw error;
+      }
+    }
+
+  } catch (error) {
+    rl.close();
+    displayMessageBox('Error', error.message, 'error');
+    process.exit(1);
+  }
+}
+
 module.exports = {
   tasksCommand,
   nextTaskCommand,
   continueCommand,
   fallbackCommand,
   autoCommand,
+  addTaskCommand,
   generateAgentPrompt,
 };

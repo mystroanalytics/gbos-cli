@@ -583,6 +583,7 @@ function displayConnectBanner(data) {
   console.log(`    ${cmd}continue${RESET}            Continue working on current/next task`);
   console.log(`    ${cmd}fallback${RESET}            Cancel current task and revert to last completed state`);
   console.log(`    ${cmd}auto${RESET}                Automatically work through all tasks and poll for new ones`);
+  console.log(`    ${cmd}add_task${RESET}            Create a new task interactively`);
   console.log(`    ${cmd}logout${RESET} ${dim}[options]${RESET}    Log out from GBOS services and clear credentials`);
   console.log(`    ${cmd}help${RESET} ${dim}[command]${RESET}      Display help for a specific command\n`);
 
