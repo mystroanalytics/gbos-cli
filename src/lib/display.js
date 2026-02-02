@@ -177,6 +177,32 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5) {
   }
 }
 
+async function displayImage(imagePath, options = {}) {
+  const fallbackWidth = options.fallbackWidth || 40;
+  const fallbackHeight = options.fallbackHeight || 12;
+  const renderOptions = { ...options };
+  delete renderOptions.fallbackWidth;
+  delete renderOptions.fallbackHeight;
+
+  try {
+    const terminalImage = await import('terminal-image');
+    const renderer = terminalImage.default || terminalImage;
+    const output = await renderer.file(imagePath, renderOptions);
+    process.stdout.write(output);
+    if (!output.endsWith('\n')) process.stdout.write('\n');
+    return true;
+  } catch (error) {
+    const fallbackLines = imageToPixels(imagePath, fallbackWidth, fallbackHeight);
+    if (!fallbackLines) {
+      throw error;
+    }
+    console.log('');
+    fallbackLines.forEach((line) => console.log(line));
+    console.log('');
+    return false;
+  }
+}
+
 
 // Fallback compact logo
 const COMPACT_LOGO = [
@@ -187,7 +213,7 @@ const COMPACT_LOGO = [
 
 // Display logo with connection details (Claude Code style - clean, minimal)
 function displayLogoWithDetails(details = null) {
-  const logoPath = path.join(__dirname, '../../images/logo.png');
+  const logoPath = path.join(__dirname, '../../images/logo-2.png');
   const version = require('../../package.json').version;
 
   // Render logo at ~20 chars wide, 5 rows tall (smooth edges)
@@ -226,7 +252,7 @@ function displayLogo() {
 }
 
 function displayAuthSuccess(data) {
-  const logoPath = path.join(__dirname, '../../images/logo.png');
+  const logoPath = path.join(__dirname, '../../images/logo-2.png');
   const version = require('../../package.json').version;
 
   let logoLines = imageToPixels(logoPath, 20, 5);
@@ -300,6 +326,7 @@ module.exports = {
   displayAuthSuccess,
   displayConnectSuccess,
   displayMessageBox,
+  displayImage,
   imageToPixels,
   getTerminalWidth,
 };

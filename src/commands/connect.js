@@ -1,45 +1,114 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
 const { checkForUpdates } = require('../lib/version');
-const { displayConnectSuccess, displayMessageBox } = require('../lib/display');
+const { displayConnectSuccess, displayMessageBox, colors } = require('../lib/display');
 const readline = require('readline');
-const path = require('path');
 const { execSync } = require('child_process');
 
-// Simple selection prompt
-async function selectOption(message, options) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+const ESC = '\x1b';
+const RESET = `${ESC}[0m`;
+const BOLD = `${ESC}[1m`;
+const DIM = `${ESC}[2m`;
+const PURPLE = `${ESC}[38;5;99m`;
+const WHITE = `${ESC}[37m`;
+const CYAN = `${ESC}[36m`;
 
-  console.log(`\n${message}\n`);
-
-  options.forEach((opt, index) => {
-    const status = opt.status ? ` [${opt.status}]` : '';
-    const connected = opt.is_connected ? ' (connected by another user)' : '';
-    console.log(`  ${index + 1}. ${opt.name}${status}${connected}`);
-    if (opt.description) {
-      console.log(`     ${opt.description}`);
-    }
-  });
-
-  console.log('');
-
+// Interactive arrow key selector
+async function selectWithArrows(title, options, displayFn) {
   return new Promise((resolve) => {
-    rl.question('Enter number (or q to quit): ', (answer) => {
-      rl.close();
-      if (answer.toLowerCase() === 'q') {
+    let selectedIndex = 0;
+    const stdin = process.stdin;
+    const stdout = process.stdout;
+
+    // Save cursor position and hide cursor
+    stdout.write(`${ESC}[?25l`);
+
+    function render() {
+      // Move cursor to start and clear
+      stdout.write(`${ESC}[${options.length + 3}A${ESC}[J`);
+
+      console.log(`\n${PURPLE}${title}${RESET}\n`);
+
+      options.forEach((opt, index) => {
+        const isSelected = index === selectedIndex;
+        const prefix = isSelected ? `${CYAN}❯${RESET}` : ' ';
+        const text = displayFn ? displayFn(opt, isSelected) : opt.name;
+
+        if (isSelected) {
+          console.log(`  ${prefix} ${BOLD}${WHITE}${text}${RESET}`);
+        } else {
+          console.log(`  ${prefix} ${DIM}${text}${RESET}`);
+        }
+      });
+
+      console.log(`\n  ${DIM}↑/↓ to navigate, Enter to select, q to cancel${RESET}`);
+    }
+
+    // Initial render
+    console.log(`\n${PURPLE}${title}${RESET}\n`);
+    options.forEach((opt, index) => {
+      const isSelected = index === selectedIndex;
+      const prefix = isSelected ? `${CYAN}❯${RESET}` : ' ';
+      const text = displayFn ? displayFn(opt, isSelected) : opt.name;
+
+      if (isSelected) {
+        console.log(`  ${prefix} ${BOLD}${WHITE}${text}${RESET}`);
+      } else {
+        console.log(`  ${prefix} ${DIM}${text}${RESET}`);
+      }
+    });
+    console.log(`\n  ${DIM}↑/↓ to navigate, Enter to select, q to cancel${RESET}`);
+
+    // Enable raw mode
+    if (stdin.isTTY) {
+      stdin.setRawMode(true);
+    }
+    stdin.resume();
+    stdin.setEncoding('utf8');
+
+    function cleanup() {
+      if (stdin.isTTY) {
+        stdin.setRawMode(false);
+      }
+      stdin.removeListener('data', onKeypress);
+      // Show cursor
+      stdout.write(`${ESC}[?25h`);
+    }
+
+    function onKeypress(key) {
+      // Ctrl+C
+      if (key === '\u0003') {
+        cleanup();
+        process.exit();
+      }
+
+      // q or Q to quit
+      if (key === 'q' || key === 'Q') {
+        cleanup();
         resolve(null);
         return;
       }
-      const index = parseInt(answer, 10) - 1;
-      if (index >= 0 && index < options.length) {
-        resolve(options[index]);
-      } else {
-        resolve(null);
+
+      // Enter
+      if (key === '\r' || key === '\n') {
+        cleanup();
+        resolve(options[selectedIndex]);
+        return;
       }
-    });
+
+      // Arrow keys (escape sequences)
+      if (key === `${ESC}[A` || key === 'k') {
+        // Up
+        selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : options.length - 1;
+        render();
+      } else if (key === `${ESC}[B` || key === 'j') {
+        // Down
+        selectedIndex = selectedIndex < options.length - 1 ? selectedIndex + 1 : 0;
+        render();
+      }
+    }
+
+    stdin.on('data', onKeypress);
   });
 }
 
@@ -80,7 +149,7 @@ async function connectCommand(options) {
       return;
     }
 
-    console.log('\nFetching available nodes...\n');
+    console.log('\nFetching available applications...\n');
 
     // Fetch available nodes
     const nodesResponse = await api.listNodes();
@@ -108,47 +177,59 @@ async function connectCommand(options) {
       nodesByApp[appId].nodes.push(node);
     });
 
-    // If multiple applications, let user select one first
-    let selectedApp = null;
     const appIds = Object.keys(nodesByApp);
 
-    if (appIds.length > 1) {
-      const appOptions = appIds.map((appId) => ({
-        id: appId,
-        name: nodesByApp[appId].application?.name || `Application ${appId}`,
-        description: `${nodesByApp[appId].nodes.length} node(s) available`,
-      }));
+    // Build application options
+    const appOptions = appIds.map((appId) => ({
+      id: appId,
+      name: nodesByApp[appId].application?.name || `Application ${appId}`,
+      nodeCount: nodesByApp[appId].nodes.length,
+      application: nodesByApp[appId].application,
+    }));
 
-      selectedApp = await selectOption('Select an application:', appOptions);
+    // Always show application selection (even if only one)
+    const selectedApp = await selectWithArrows(
+      'Select an application:',
+      appOptions,
+      (opt) => `${opt.name} ${DIM}(${opt.nodeCount} node${opt.nodeCount > 1 ? 's' : ''})${RESET}`
+    );
 
-      if (!selectedApp) {
-        console.log('Connection cancelled.\n');
-        return;
-      }
-    } else {
-      selectedApp = { id: appIds[0] };
+    if (!selectedApp) {
+      console.log('\nConnection cancelled.\n');
+      return;
     }
 
     // Get nodes for selected application
     const appNodes = nodesByApp[selectedApp.id].nodes;
     const selectedApplication = nodesByApp[selectedApp.id].application;
 
-    // Let user select a node
+    // Build node options
     const nodeOptions = appNodes.map((node) => ({
       ...node,
-      name: node.name,
-      description: node.node_type || '',
+      displayName: node.name,
+      nodeType: node.node_type || '',
+      isBusy: node.is_connected && node.active_connection,
     }));
 
-    const selectedNode = await selectOption('Select a development node:', nodeOptions);
+    // Select a node
+    const selectedNode = await selectWithArrows(
+      'Select a development node:',
+      nodeOptions,
+      (opt) => {
+        let text = opt.displayName;
+        if (opt.nodeType) text += ` ${DIM}[${opt.nodeType}]${RESET}`;
+        if (opt.isBusy) text += ` ${DIM}(busy)${RESET}`;
+        return text;
+      }
+    );
 
     if (!selectedNode) {
-      console.log('Connection cancelled.\n');
+      console.log('\nConnection cancelled.\n');
       return;
     }
 
     // Check if node is busy
-    if (selectedNode.is_connected && selectedNode.active_connection) {
+    if (selectedNode.isBusy) {
       displayMessageBox(
         'Node Busy',
         `Node "${selectedNode.name}" is already connected by another user. Please select a different node.`,
