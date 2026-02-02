@@ -298,8 +298,8 @@ function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~8 chars wide, 3 rows tall with high alpha threshold
-  let logoLines = imageToPixels(logoPath, 8, 3, {
+  // Render logo at ~12 chars wide, 5 rows tall with high alpha threshold
+  let logoLines = imageToPixels(logoPath, 12, 5, {
     alphaThreshold: 220,
     crop: true,
     cropAlphaThreshold: 220,
@@ -342,7 +342,7 @@ function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 8, 3, {
+  let logoLines = imageToPixels(logoPath, 12, 5, {
     alphaThreshold: 220,
     crop: true,
     cropAlphaThreshold: 220,
@@ -350,7 +350,7 @@ function displayAuthSuccess(data) {
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 14;
+  const logoWidth = 18;
 
   const rightLines = [];
   rightLines.push(`${BOLD}${colors.purple5}gbos.io${RESET} ${DIM}v${version}${RESET}`);
