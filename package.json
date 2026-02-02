@@ -1,7 +1,7 @@
 {
   "name": "gbos",
   "version": "1.0.0",
-  "description": "GBOS - CLI application with TUI",
+  "description": "GBOS - Command line interface for GBOS services",
   "main": "src/index.js",
   "bin": {
     "gbos": "./src/cli.js"
@@ -14,6 +14,27 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["gbos", "cli", "tui"],
-  "license": "MIT"
+  "keywords": [
+    "gbos",
+    "cli",
+    "tui",
+    "cloud",
+    "devtools"
+  ],
+  "author": "Mystro Analytics",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mystroanalytics/gbos-node-local.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mystroanalytics/gbos-node-local/issues"
+  },
+  "homepage": "https://github.com/mystroanalytics/gbos-node-local#readme",
+  "files": [
+    "src/**/*"
+  ],
+  "dependencies": {
+    "commander": "^12.1.0"
+  }
 }
