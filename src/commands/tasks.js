@@ -151,11 +151,6 @@ async function tasksCommand() {
     const response = await api.getTasks();
     const tasks = response.data || [];
 
-    if (tasks.length === 0) {
-      console.log(`${DIM}No tasks assigned to this node.${RESET}\n`);
-      return;
-    }
-
     // Display tasks in a table
     const termWidth = getTerminalWidth();
     const tableWidth = Math.min(100, termWidth - 4);
@@ -164,21 +159,40 @@ async function tasksCommand() {
     console.log(`${BOLD}  Tasks for ${connection.node?.name || 'this node'}${RESET}`);
     console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(tableWidth)}${RESET}\n`);
 
-    tasks.forEach((task, index) => {
-      const formatted = formatTask(task, index);
-      console.log(`  ${formatted.statusDisplay}  ${BOLD}${formatted.title}${RESET}`);
-      console.log(`     ${DIM}ID: ${formatted.id} | Priority: ${formatted.priority}${RESET}`);
-      if (index < tasks.length - 1) console.log('');
-    });
+    if (tasks.length === 0) {
+      console.log(`  ${DIM}No tasks assigned to this node.${RESET}\n`);
+    } else {
+      tasks.forEach((task, index) => {
+        const formatted = formatTask(task, index);
+        console.log(`  ${formatted.statusDisplay}  ${BOLD}${formatted.title}${RESET}`);
+        console.log(`     ${DIM}ID: ${formatted.id} | Priority: ${formatted.priority}${RESET}`);
+        if (index < tasks.length - 1) console.log('');
+      });
+    }
 
     console.log(`\n${fg(...LOGO_NAVY)}${'─'.repeat(tableWidth)}${RESET}`);
     console.log(`${DIM}  Total: ${tasks.length} task(s)${RESET}\n`);
 
+    // Show meta info if available
+    if (response.meta) {
+      if (response.meta.total > tasks.length) {
+        console.log(`${DIM}  Showing ${tasks.length} of ${response.meta.total} total tasks${RESET}\n`);
+      }
+    }
+
   } catch (error) {
     if (error.status === 404 || error.message?.includes('not found')) {
-      console.log(`${DIM}No tasks assigned to this node.${RESET}\n`);
-      console.log(`${DIM}Note: The tasks endpoint may not be implemented yet on the server.${RESET}`);
-      console.log(`${DIM}Required API: GET /api/v1/cli/tasks${RESET}\n`);
+      // Fallback: try to get info from next task endpoint
+      try {
+        const nextResponse = await api.getNextTask();
+        console.log(`${DIM}Tasks list endpoint not available yet.${RESET}`);
+        if (nextResponse.pending_tasks_count) {
+          console.log(`${DIM}Pending tasks in queue: ${nextResponse.pending_tasks_count}${RESET}`);
+        }
+        console.log(`${DIM}Use "gbos next" or "gbos continue" to get the next task.${RESET}\n`);
+      } catch (e) {
+        console.log(`${DIM}No tasks available.${RESET}\n`);
+      }
       return;
     }
     displayMessageBox('Error', error.message, 'error');
