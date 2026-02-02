@@ -1,6 +1,6 @@
 {
   "name": "gbos",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "GBOS - Command line interface for GBOS services",
   "main": "src/index.js",
   "bin": {
@@ -19,7 +19,9 @@
     "cli",
     "tui",
     "cloud",
-    "devtools"
+    "devtools",
+    "development",
+    "ai-agent"
   ],
   "author": "Mystro Analytics",
   "license": "MIT",
