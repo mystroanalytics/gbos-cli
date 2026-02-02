@@ -363,9 +363,16 @@ async function connectCommand(options) {
       console.log('Skills setup results:', JSON.stringify(skillsResults, null, 2));
     }
 
+    // Get user name from session
+    const userName = session.user_first_name && session.user_last_name
+      ? `${session.user_first_name} ${session.user_last_name}`
+      : session.user_name || 'N/A';
+
     // Display success with banner
     displayConnectBanner({
       accountName: accountName,
+      userName: userName,
+      sessionId: connection_id,
       applicationName: applicationName,
       nodeName: node.name,
     });

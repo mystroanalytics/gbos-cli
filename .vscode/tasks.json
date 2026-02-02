@@ -1,0 +1,46 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "GBOS: Status",
+      "type": "shell",
+      "command": "gbos",
+      "args": [
+        "status"
+      ]
+    },
+    {
+      "label": "GBOS: Tasks",
+      "type": "shell",
+      "command": "gbos",
+      "args": [
+        "tasks"
+      ]
+    },
+    {
+      "label": "GBOS: Continue",
+      "type": "shell",
+      "command": "gbos",
+      "args": [
+        "continue"
+      ]
+    },
+    {
+      "label": "GBOS: Fallback",
+      "type": "shell",
+      "command": "gbos",
+      "args": [
+        "fallback"
+      ]
+    },
+    {
+      "label": "GBOS: Auto",
+      "type": "shell",
+      "command": "gbos",
+      "args": [
+        "auto"
+      ],
+      "isBackground": true
+    }
+  ]
+}
