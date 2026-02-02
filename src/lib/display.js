@@ -1,4 +1,3 @@
-const { execSync, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { PNG } = require('pngjs');
@@ -8,43 +7,45 @@ const colors = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',
   dim: '\x1b[2m',
-  // Dark purple shades (256 color mode)
-  purple1: '\x1b[38;5;54m',   // Darkest purple
-  purple2: '\x1b[38;5;55m',   // Dark purple
-  purple3: '\x1b[38;5;56m',   // Medium dark purple
-  purple4: '\x1b[38;5;93m',   // Medium purple
-  purple5: '\x1b[38;5;99m',   // Light purple
-  purple6: '\x1b[38;5;141m',  // Lighter purple
-  purple7: '\x1b[38;5;183m',  // Lightest purple
-  // Fallback standard colors
-  magenta: '\x1b[35m',
+  purple1: '\x1b[38;5;54m',
+  purple2: '\x1b[38;5;55m',
+  purple3: '\x1b[38;5;56m',
+  purple4: '\x1b[38;5;93m',
+  purple5: '\x1b[38;5;99m',
+  purple6: '\x1b[38;5;141m',
+  purple7: '\x1b[38;5;183m',
   white: '\x1b[37m',
   gray: '\x1b[90m',
   green: '\x1b[32m',
   yellow: '\x1b[33m',
+  red: '\x1b[31m',
 };
 
-// ASCII characters from dark to light
-const ASCII_CHARS = ' .:-=+*#%@';
+// ASCII characters for density mapping
+const ASCII_CHARS = ' .,:;i1tfLCG08@#';
 
-// Convert image to ASCII art
-function imageToAscii(imagePath, width = 30) {
+// Get terminal width
+function getTerminalWidth() {
+  return process.stdout.columns || 80;
+}
+
+// Convert PNG to ASCII art
+function imageToAscii(imagePath, width = 20) {
   try {
     const data = fs.readFileSync(imagePath);
     const png = PNG.sync.read(data);
 
-    const aspectRatio = 0.5; // Terminal characters are taller than wide
+    const aspectRatio = 0.5;
     const height = Math.floor((png.height / png.width) * width * aspectRatio);
 
     const cellWidth = png.width / width;
     const cellHeight = png.height / height;
 
-    let ascii = '';
+    const lines = [];
 
     for (let y = 0; y < height; y++) {
       let row = '';
       for (let x = 0; x < width; x++) {
-        // Sample the center of each cell
         const sampleX = Math.floor(x * cellWidth + cellWidth / 2);
         const sampleY = Math.floor(y * cellHeight + cellHeight / 2);
         const idx = (png.width * sampleY + sampleX) << 2;
@@ -54,230 +55,200 @@ function imageToAscii(imagePath, width = 30) {
         const b = png.data[idx + 2];
         const a = png.data[idx + 3];
 
-        // If transparent, use space
-        if (a < 128) {
+        if (a < 50 || (r > 240 && g > 240 && b > 240)) {
           row += ' ';
           continue;
         }
 
-        // Calculate brightness (0-255)
         const brightness = (r + g + b) / 3;
-        // Map to ASCII character (inverted - darker pixels = denser characters)
         const charIndex = Math.floor((1 - brightness / 255) * (ASCII_CHARS.length - 1));
-        row += ASCII_CHARS[charIndex];
+        row += ASCII_CHARS[Math.max(0, Math.min(charIndex, ASCII_CHARS.length - 1))];
       }
-      ascii += row + '\n';
+      lines.push(row);
     }
 
-    return ascii;
+    return lines;
   } catch (e) {
     return null;
   }
 }
 
-// Color the ASCII art with purple gradient based on position
-function colorAsciiArt(ascii, startColor = colors.purple2, endColor = colors.purple6) {
-  const lines = ascii.split('\n').filter(line => line.trim());
-  const purpleGradient = [colors.purple2, colors.purple3, colors.purple4, colors.purple5, colors.purple6];
+// Compact text-based logo with horse
+const COMPACT_LOGO = [
+  `${colors.purple3}    ▄▀▀▀▄▄`,
+  `${colors.purple3}  ▄▀${colors.purple4}●${colors.purple3}    ▀▄`,
+  `${colors.purple4} █        █   ${colors.purple5}${colors.bold}gbos.io${colors.reset}`,
+  `${colors.purple4}  ▀▄    ▄▀`,
+  `${colors.purple5}    ▀▀▀▀`,
+];
 
-  return lines.map((line, i) => {
-    const colorIndex = Math.floor((i / lines.length) * purpleGradient.length);
-    const color = purpleGradient[Math.min(colorIndex, purpleGradient.length - 1)];
-    return color + line + colors.reset;
-  }).join('\n');
-}
+// Display logo with connection details
+function displayLogoWithDetails(details = null) {
+  const logoPath = path.join(__dirname, '../../images/logo.png'); // Use horse-only logo
+  const termWidth = getTerminalWidth();
+  const logoWidth = 20;
+  const rightWidth = termWidth - logoWidth - 8;
 
-// ASCII art horse head + GBOS logo combined (fallback)
-const ASCII_LOGO_SIMPLE = `
-${colors.purple3}${colors.bold}        ▄▀▀▀▄▄
-${colors.purple3}      ▄▀      ▀▄        ${colors.purple4}██████╗ ██████╗  ██████╗ ███████╗
-${colors.purple4}     █   ●     █       ${colors.purple4}██╔════╝ ██╔══██╗██╔═══██╗██╔════╝
-${colors.purple4}     █         █       ${colors.purple5}██║  ███╗██████╔╝██║   ██║███████╗
-${colors.purple5}      ▀▄     ▄▀        ${colors.purple5}██║   ██║██╔══██╗██║   ██║╚════██║
-${colors.purple5}    ▄▀  ▀▀▀▀▀          ${colors.purple6}╚██████╔╝██████╔╝╚██████╔╝███████║
-${colors.purple6}   █   █               ${colors.purple6} ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝
-${colors.purple6}   █   █
-${colors.reset}`;
+  let asciiLines = imageToAscii(logoPath, logoWidth);
 
-// GBOS text only
-const GBOS_TEXT = `${colors.purple4}${colors.bold}██████╗ ██████╗  ██████╗ ███████╗
-${colors.purple4}██╔════╝ ██╔══██╗██╔═══██╗██╔════╝
-${colors.purple5}██║  ███╗██████╔╝██║   ██║███████╗
-${colors.purple5}██║   ██║██╔══██╗██║   ██║╚════██║
-${colors.purple6}╚██████╔╝██████╔╝╚██████╔╝███████║
-${colors.purple6} ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝${colors.reset}`;
-
-// Check if catimg is available
-function hasCatimg() {
-  try {
-    execSync('which catimg', { stdio: 'ignore' });
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-// Display logo using image-to-ascii or ASCII fallback
-function displayLogo() {
-  const logoPath = path.join(__dirname, '../../images/logo.png');
-
-  // Try to convert image to ASCII
-  if (fs.existsSync(logoPath)) {
-    const ascii = imageToAscii(logoPath, 25);
-    if (ascii) {
-      // Color the ASCII art
-      const coloredAscii = colorAsciiArt(ascii);
-      const asciiLines = coloredAscii.split('\n');
-      const gbosLines = GBOS_TEXT.split('\n');
-
-      // Combine horse ASCII and GBOS text side by side
-      console.log('');
-      const maxLines = Math.max(asciiLines.length, gbosLines.length);
-      for (let i = 0; i < maxLines; i++) {
-        const asciiLine = asciiLines[i] || '';
-        const gbosLine = gbosLines[i - Math.floor((maxLines - gbosLines.length) / 2)] || '';
-        // Pad ASCII line to consistent width
-        const paddedAscii = asciiLine.padEnd(35);
-        console.log(`  ${paddedAscii}  ${gbosLine}`);
+  // Color all ASCII lines purple and add "gbos.io" text
+  if (asciiLines && asciiLines.length > 0) {
+    asciiLines = asciiLines.map((line, idx) => {
+      const coloredLine = colors.purple3 + line + colors.reset;
+      const midPoint = Math.floor(asciiLines.length / 2);
+      if (idx === midPoint) {
+        return coloredLine + `  ${colors.purple5}${colors.bold}gbos.io${colors.reset}`;
       }
-      console.log('');
-      return;
-    }
+      return coloredLine;
+    });
   }
 
-  // Fallback to manual ASCII horse
-  console.log(ASCII_LOGO_SIMPLE);
+  if (!asciiLines) {
+    asciiLines = COMPACT_LOGO;
+  }
+
+  // Build right side (details box)
+  const rightLines = [];
+
+  if (details) {
+    rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${colors.reset}`);
+    rightLines.push(`${colors.purple4}│${colors.reset} ${colors.bold}${colors.purple5}Connected${colors.reset}${' '.repeat(rightWidth - 12)}${colors.purple4}│${colors.reset}`);
+    rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${colors.reset}`);
+
+    const addField = (label, value, valueColor = colors.white) => {
+      const val = (value || 'N/A').toString().substring(0, rightWidth - label.length - 6);
+      const padding = ' '.repeat(Math.max(0, rightWidth - label.length - val.length - 5));
+      rightLines.push(`${colors.purple4}│${colors.reset} ${colors.purple7}${label}${colors.reset} ${valueColor}${val}${colors.reset}${padding}${colors.purple4}│${colors.reset}`);
+    };
+
+    addField('Account:', details.accountName, colors.white);
+    addField('App:', details.applicationName, colors.purple5);
+    addField('Node:', details.nodeName, colors.purple4);
+    addField('ID:', details.nodeId, colors.dim);
+    if (details.connectionId) {
+      addField('Conn:', details.connectionId.substring(0, 18) + '...', colors.dim);
+    }
+
+    rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${colors.reset}`);
+  }
+
+  // Print side by side
+  console.log('');
+  const maxLines = Math.max(asciiLines.length, rightLines.length);
+  const logoStart = Math.floor((maxLines - asciiLines.length) / 2);
+  const detailStart = Math.floor((maxLines - rightLines.length) / 2);
+
+  for (let i = 0; i < maxLines; i++) {
+    const left = asciiLines[i - logoStart] || '';
+    const right = rightLines[i - detailStart] || '';
+    const paddedLeft = left.padEnd(logoWidth + 30); // Account for color codes
+    console.log(`  ${paddedLeft}  ${right}`);
+  }
+  console.log('');
 }
 
-// Display styled session summary (Gemini design + Claude Code layout) - Purple theme
-function displaySessionSummary(data) {
-  const {
-    accountName,
-    applicationName,
-    nodeName,
-    nodeId,
-    connectionId,
-    userId,
-    accountId,
-  } = data;
-
-  const line = '─'.repeat(61);
-  const doubleLine = '═'.repeat(61);
-
-  console.log(`\n${colors.purple3}╔${doubleLine}╗${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}${colors.bold}${colors.purple5}                        GBOS Connected                        ${colors.reset}${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}╠${doubleLine}╣${colors.reset}`);
-
-  // Account section
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}Account${colors.reset}                                                   ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.bold}${colors.purple7}${(accountName || 'N/A').substring(0, 50).padEnd(55)}${colors.reset}  ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.dim}${colors.purple6}ID: ${accountId || 'N/A'}${colors.reset}${' '.repeat(Math.max(0, 53 - String(accountId || 'N/A').length))}${colors.purple3}║${colors.reset}`);
-
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple4}╟${line}╢${colors.reset}`);
-
-  // Application section
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}Application${colors.reset}                                               ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.bold}${colors.purple5}${(applicationName || 'N/A').substring(0, 50).padEnd(55)}${colors.reset}  ${colors.purple3}║${colors.reset}`);
-
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple4}╟${line}╢${colors.reset}`);
-
-  // Node section
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}Development Node${colors.reset}                                          ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.bold}${colors.purple4}${(nodeName || 'N/A').substring(0, 50).padEnd(55)}${colors.reset}  ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.dim}${colors.purple6}Node ID: ${nodeId || 'N/A'}${colors.reset}${' '.repeat(Math.max(0, 48 - String(nodeId || 'N/A').length))}${colors.purple3}║${colors.reset}`);
-
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple4}╟${line}╢${colors.reset}`);
-
-  // Connection section
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}Connection${colors.reset}                                                ${colors.purple3}║${colors.reset}`);
-  const connIdDisplay = connectionId ? connectionId.substring(0, 36) : 'N/A';
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple5}${connIdDisplay.padEnd(55)}${colors.reset}  ${colors.purple3}║${colors.reset}`);
-
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}╚${doubleLine}╝${colors.reset}`);
-
-  console.log(`\n${colors.purple5}✓${colors.reset} ${colors.bold}${colors.purple6}Ready to work!${colors.reset}`);
-  console.log(`${colors.dim}${colors.purple7}  Session stored at ~/.gbos/session.json${colors.reset}\n`);
+function displayLogo() {
+  displayLogoWithDetails(null);
 }
 
-// Display auth success screen - Purple theme
 function displayAuthSuccess(data) {
-  displayLogo();
+  const termWidth = getTerminalWidth();
+  const logoWidth = 20;
+  const rightWidth = termWidth - logoWidth - 8;
 
-  const line = '─'.repeat(61);
-  const doubleLine = '═'.repeat(61);
+  const logoPath = path.join(__dirname, '../../images/logo.png');
+  let asciiLines = imageToAscii(logoPath, logoWidth);
 
-  console.log(`${colors.purple3}╔${doubleLine}╗${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}${colors.bold}${colors.purple5}                   Authentication Successful                 ${colors.reset}${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}╠${doubleLine}╣${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}User ID${colors.reset}       ${colors.purple7}${String(data.userId || 'N/A').padEnd(42)}${colors.reset}${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}Account ID${colors.reset}    ${colors.purple7}${String(data.accountId || 'N/A').padEnd(42)}${colors.reset}${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}  ${colors.purple6}Session${colors.reset}       ${colors.dim}${colors.purple5}${(data.sessionId || 'N/A').substring(0, 36).padEnd(42)}${colors.reset}${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}║${colors.reset}                                                             ${colors.purple3}║${colors.reset}`);
-  console.log(`${colors.purple3}╚${doubleLine}╝${colors.reset}`);
+  // Color all ASCII lines purple and add "gbos.io" text
+  if (asciiLines && asciiLines.length > 0) {
+    const midPoint = Math.floor(asciiLines.length / 2);
+    asciiLines = asciiLines.map((line, idx) => {
+      const coloredLine = colors.purple3 + line + colors.reset;
+      if (idx === midPoint) {
+        return coloredLine + `  ${colors.purple5}${colors.bold}gbos.io${colors.reset}`;
+      }
+      return coloredLine;
+    });
+  }
 
-  console.log(`\n${colors.purple5}✓${colors.reset} ${colors.bold}${colors.purple6}Authenticated!${colors.reset}`);
-  console.log(`${colors.dim}${colors.purple7}  Run "gbos connect" to connect to a development node.${colors.reset}\n`);
-}
+  if (!asciiLines) asciiLines = COMPACT_LOGO;
 
-// Display connect success screen
-function displayConnectSuccess(data) {
-  displayLogo();
-  displaySessionSummary(data);
-}
+  const rightLines = [];
+  rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${colors.reset}`);
+  rightLines.push(`${colors.purple4}│${colors.reset} ${colors.bold}${colors.purple5}✓ Authenticated${colors.reset}${' '.repeat(rightWidth - 18)}${colors.purple4}│${colors.reset}`);
+  rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${colors.reset}`);
 
-// Display simple message box - Purple theme
-function displayMessageBox(title, message, type = 'info') {
-  const colorMap = {
-    info: colors.purple4,
-    success: colors.purple5,
-    warning: colors.yellow,
-    error: '\x1b[31m',
+  const addField = (label, value) => {
+    const val = (value || 'N/A').toString().substring(0, rightWidth - label.length - 6);
+    const padding = ' '.repeat(Math.max(0, rightWidth - label.length - val.length - 5));
+    rightLines.push(`${colors.purple4}│${colors.reset} ${colors.purple7}${label}${colors.reset} ${colors.white}${val}${colors.reset}${padding}${colors.purple4}│${colors.reset}`);
   };
+
+  addField('User:', data.userId);
+  addField('Account:', data.accountId);
+  addField('Session:', (data.sessionId || '').substring(0, 24) + '...');
+
+  rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${colors.reset}`);
+  rightLines.push('');
+  rightLines.push(`${colors.purple7}${colors.dim}Run "gbos connect" to connect${colors.reset}`);
+
+  console.log('');
+  const maxLines = Math.max(asciiLines.length, rightLines.length);
+  const logoStart = Math.floor((maxLines - asciiLines.length) / 2);
+  const detailStart = Math.floor((maxLines - rightLines.length) / 2);
+
+  for (let i = 0; i < maxLines; i++) {
+    const left = asciiLines[i - logoStart] || '';
+    const right = rightLines[i - detailStart] || '';
+    console.log(`  ${left.padEnd(logoWidth + 30)}  ${right}`);
+  }
+  console.log('');
+}
+
+function displayConnectSuccess(data) {
+  displayLogoWithDetails(data);
+  console.log(`  ${colors.purple5}✓${colors.reset} ${colors.bold}${colors.purple6}Ready to work!${colors.reset}`);
+  console.log(`  ${colors.dim}${colors.purple7}Session: ~/.gbos/session.json${colors.reset}\n`);
+}
+
+function displaySessionSummary(data) {
+  displayLogoWithDetails(data);
+}
+
+function displayMessageBox(title, message, type = 'info') {
+  const colorMap = { info: colors.purple4, success: colors.purple5, warning: colors.yellow, error: colors.red };
   const color = colorMap[type] || colors.purple4;
   const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠' : type === 'error' ? '✗' : 'ℹ';
+  const width = Math.min(55, getTerminalWidth() - 4);
 
-  const line = '─'.repeat(61);
+  console.log(`\n${color}┌${'─'.repeat(width)}┐${colors.reset}`);
+  console.log(`${color}│${colors.reset} ${icon} ${colors.bold}${colors.purple6}${title.substring(0, width - 5).padEnd(width - 4)}${colors.reset}${color}│${colors.reset}`);
+  console.log(`${color}├${'─'.repeat(width)}┤${colors.reset}`);
 
-  console.log(`\n${color}┌${line}┐${colors.reset}`);
-  console.log(`${color}│${colors.reset} ${icon} ${colors.bold}${colors.purple6}${title.padEnd(56)}${colors.reset}${color}│${colors.reset}`);
-  console.log(`${color}├${line}┤${colors.reset}`);
-
-  // Word wrap message
   const words = message.split(' ');
   let currentLine = '';
-
   for (const word of words) {
-    if ((currentLine + ' ' + word).trim().length > 57) {
-      console.log(`${color}│${colors.reset}  ${colors.purple7}${currentLine.trim().padEnd(57)}${colors.reset}${color}│${colors.reset}`);
+    if ((currentLine + ' ' + word).trim().length > width - 4) {
+      console.log(`${color}│${colors.reset} ${colors.purple7}${currentLine.trim().padEnd(width - 2)}${colors.reset}${color}│${colors.reset}`);
       currentLine = word;
     } else {
       currentLine = currentLine ? currentLine + ' ' + word : word;
     }
   }
-
   if (currentLine) {
-    console.log(`${color}│${colors.reset}  ${colors.purple7}${currentLine.trim().padEnd(57)}${colors.reset}${color}│${colors.reset}`);
+    console.log(`${color}│${colors.reset} ${colors.purple7}${currentLine.trim().padEnd(width - 2)}${colors.reset}${color}│${colors.reset}`);
   }
-
-  console.log(`${color}└${line}┘${colors.reset}\n`);
+  console.log(`${color}└${'─'.repeat(width)}┘${colors.reset}\n`);
 }
 
 module.exports = {
   colors,
   displayLogo,
+  displayLogoWithDetails,
   displaySessionSummary,
   displayAuthSuccess,
   displayConnectSuccess,
   displayMessageBox,
-  hasCatimg,
   imageToAscii,
+  getTerminalWidth,
 };
