@@ -6,7 +6,7 @@ const program = new Command();
 const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
-const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, autoCommand } = require('./commands/tasks');
+const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, autoCommand, addTaskCommand } = require('./commands/tasks');
 const config = require('./lib/config');
 const { displayStatus, printBanner } = require('./lib/display');
 
@@ -124,6 +124,12 @@ program
   .action(autoCommand);
 
 program
+  .command('add_task')
+  .alias('add')
+  .description('Create a new task interactively')
+  .action(addTaskCommand);
+
+program
   .command('logout')
   .description('Log out from GBOS services and clear credentials')
   .option('-a, --all', 'Clear all stored data including machine ID')
@@ -139,7 +145,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, auto, logout, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, auto, add_task, logout, help');
       }
     } else {
       program.outputHelp();

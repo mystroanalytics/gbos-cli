@@ -176,6 +176,13 @@ class GbosApiClient {
     });
   }
 
+  async createTask(taskData) {
+    return this.request('/cli/tasks', {
+      method: 'POST',
+      body: taskData,
+    });
+  }
+
   // Activity logging
   async logActivity(activity) {
     return this.request('/cli/activity', {
