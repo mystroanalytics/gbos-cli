@@ -1,5 +1,7 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
+const { checkForUpdates } = require('../lib/version');
+const { displayAuthSuccess, displayMessageBox } = require('../lib/display');
 const readline = require('readline');
 
 // Simple prompt for email
@@ -26,21 +28,26 @@ function sleep(ms) {
 const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 async function authCommand(options) {
+  // Check for updates first
+  await checkForUpdates();
+
   // Check if already authenticated
   if (config.isAuthenticated() && !options.force) {
     const session = config.loadSession();
-    console.log(`\nAlready authenticated as user ID: ${session.user_id}`);
-    console.log(`Account ID: ${session.account_id}`);
-    console.log(`\nUse --force to re-authenticate or 'gbos logout' first.\n`);
+    displayMessageBox(
+      'Already Authenticated',
+      `User ID: ${session.user_id}, Account ID: ${session.account_id}. Use --force to re-authenticate or "gbos logout" first.`,
+      'info'
+    );
     return;
   }
 
   try {
     // Get email from user
-    const email = options.email || await promptEmail();
+    const email = options.email || (await promptEmail());
 
     if (!email || !email.includes('@')) {
-      console.error('Invalid email address.');
+      displayMessageBox('Invalid Email', 'Please enter a valid email address.', 'error');
       process.exit(1);
     }
 
@@ -48,7 +55,8 @@ async function authCommand(options) {
 
     // Initialize device auth flow
     const initResponse = await api.initAuth({ email });
-    const { device_code, verification_code, verification_url_complete, interval, expires_in } = initResponse.data;
+    const { device_code, verification_code, verification_url_complete, interval, expires_in } =
+      initResponse.data;
 
     console.log('\n┌─────────────────────────────────────────────────────────────┐');
     console.log('│                    GBOS Authentication                       │');
@@ -61,8 +69,8 @@ async function authCommand(options) {
     console.log(`Code expires in ${Math.floor(expires_in / 60)} minutes.\n`);
 
     // Try to open the URL in the default browser
-    const openCommand = process.platform === 'darwin' ? 'open' :
-                        process.platform === 'win32' ? 'start' : 'xdg-open';
+    const openCommand =
+      process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
 
     try {
       const { exec } = require('child_process');
@@ -96,7 +104,14 @@ async function authCommand(options) {
           // Clear spinner line
           process.stdout.write('\r' + ' '.repeat(50) + '\r');
 
-          const { access_token, refresh_token, expires_in: tokenExpires, user_id, account_id, session_id } = statusResponse.data;
+          const {
+            access_token,
+            refresh_token,
+            expires_in: tokenExpires,
+            user_id,
+            account_id,
+            session_id,
+          } = statusResponse.data;
 
           // Calculate token expiration
           const tokenExpiresAt = new Date(Date.now() + tokenExpires * 1000).toISOString();
@@ -112,23 +127,29 @@ async function authCommand(options) {
             authenticated_at: new Date().toISOString(),
           });
 
-          console.log('\n✓ Authentication successful!\n');
-          console.log(`  User ID:    ${user_id}`);
-          console.log(`  Account ID: ${account_id}`);
-          console.log(`  Session:    ${session_id}\n`);
-          console.log('Run "gbos connect" to connect to a development node.\n');
+          // Display success with logo
+          displayAuthSuccess({
+            userId: user_id,
+            accountId: account_id,
+            sessionId: session_id,
+          });
+
           return;
         }
 
         if (statusResponse.status === 'denied') {
           process.stdout.write('\r' + ' '.repeat(50) + '\r');
-          console.log('\n✗ Authorization denied.\n');
+          displayMessageBox('Authorization Denied', 'The authorization request was denied.', 'error');
           process.exit(1);
         }
 
         if (statusResponse.status === 'expired') {
           process.stdout.write('\r' + ' '.repeat(50) + '\r');
-          console.log('\n✗ Authorization request expired. Please try again.\n');
+          displayMessageBox(
+            'Authorization Expired',
+            'The authorization request expired. Please try again.',
+            'error'
+          );
           process.exit(1);
         }
 
@@ -136,12 +157,16 @@ async function authCommand(options) {
       } catch (error) {
         if (error.status === 410) {
           process.stdout.write('\r' + ' '.repeat(50) + '\r');
-          console.log('\n✗ Authorization request expired. Please try again.\n');
+          displayMessageBox(
+            'Authorization Expired',
+            'The authorization request expired. Please try again.',
+            'error'
+          );
           process.exit(1);
         }
         if (error.status === 403) {
           process.stdout.write('\r' + ' '.repeat(50) + '\r');
-          console.log('\n✗ Authorization denied.\n');
+          displayMessageBox('Authorization Denied', 'The authorization request was denied.', 'error');
           process.exit(1);
         }
         // For other errors, continue polling
@@ -149,11 +174,10 @@ async function authCommand(options) {
     }
 
     process.stdout.write('\r' + ' '.repeat(50) + '\r');
-    console.log('\n✗ Authorization timed out. Please try again.\n');
+    displayMessageBox('Authorization Timeout', 'The authorization request timed out. Please try again.', 'error');
     process.exit(1);
-
   } catch (error) {
-    console.error(`\nAuthentication failed: ${error.message}\n`);
+    displayMessageBox('Authentication Failed', error.message, 'error');
     if (process.env.DEBUG) {
       console.error(error);
     }

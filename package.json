@@ -1,6 +1,6 @@
 {
   "name": "gbos",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "GBOS - Command line interface for GBOS services",
   "main": "src/index.js",
   "bin": {
@@ -34,7 +34,8 @@
   },
   "homepage": "https://github.com/mystroanalytics/gbos-node-local#readme",
   "files": [
-    "src/**/*"
+    "src/**/*",
+    "images/**/*"
   ],
   "dependencies": {
     "commander": "^12.1.0"
