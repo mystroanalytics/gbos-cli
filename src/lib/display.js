@@ -311,8 +311,8 @@ function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~22 chars wide, 7 rows tall with smooth curved edges
-  let logoLines = imageToPixels(logoPath, 22, 7, {
+  // Render logo at ~22 chars wide, 9 rows tall with smooth curved edges
+  let logoLines = imageToPixels(logoPath, 22, 9, {
     alphaThreshold: 100,
     crop: true,
     cropAlphaThreshold: 100,
@@ -355,7 +355,7 @@ function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 22, 7, {
+  let logoLines = imageToPixels(logoPath, 22, 9, {
     alphaThreshold: 100,
     crop: true,
     cropAlphaThreshold: 100,
