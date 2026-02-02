@@ -15,67 +15,105 @@ const MCP_CONFIG = {
 const SKILLS = {
   'CLAUDE.md': () => `# GBOS Integration
 
-This project uses GBOS for task management.
+This project uses GBOS (Generative Business Operating System) for task management.
 
-## Commands
+## /gbos Command
 
-Run in terminal:
-- \`gbos status\` - Check connection status
-- \`gbos tasks\` - List assigned tasks
-- \`gbos continue\` - Get next task prompt
-- \`gbos fallback\` - Cancel current task
-- \`gbos auto\` - Auto-process tasks
+When the user types \`/gbos\` or asks about GBOS commands, run \`gbos status\` to show the current status, then list the available commands below.
+
+## Available Commands
+
+Run these in the terminal:
+
+| Command | Description |
+|---------|-------------|
+| \`gbos status\` | Show current authentication and connection status |
+| \`gbos tasks\` | List all tasks assigned to this development node |
+| \`gbos continue\` | Get the next task prompt to work on |
+| \`gbos next\` | Preview the next task in the queue |
+| \`gbos fallback\` | Cancel current task and revert changes |
+| \`gbos auto\` | Automatically process all tasks |
+| \`gbos add_task\` | Create a new task interactively |
+| \`gbos disconnect\` | Disconnect from the current node |
 
 ## Workflow
 
-1. Run \`gbos continue\` to get your task
-2. Follow the task instructions
-3. Run \`gbos continue\` for the next task
+1. Run \`gbos continue\` to get your next task
+2. Follow the task instructions provided
+3. When done, run \`gbos continue\` for the next task
+
+## Quick Actions
+
+- To check status: Run \`gbos status\`
+- To get work: Run \`gbos continue\`
+- To see all tasks: Run \`gbos tasks\`
 `,
 
   '.cursorrules': () => `# GBOS Task Management
 
+When user types "/gbos", run "gbos status" and show available commands.
+
 ## Commands
-- gbos status - Check connection
-- gbos tasks - List tasks
-- gbos continue - Get task prompt
-- gbos fallback - Cancel task
-- gbos auto - Auto-process
+| Command | Description |
+|---------|-------------|
+| gbos status | Show status |
+| gbos tasks | List tasks |
+| gbos continue | Get next task |
+| gbos next | Preview next task |
+| gbos fallback | Cancel task |
+| gbos auto | Auto-process |
+| gbos add_task | Create task |
 
 ## Workflow
-1. gbos continue - Get task
-2. Execute instructions
-3. gbos continue - Next task
+1. Run: gbos continue
+2. Execute the task instructions
+3. Run: gbos continue (for next task)
 `,
 
   'GEMINI.md': () => `# GBOS Integration
 
+When user types "/gbos" or asks about GBOS, run "gbos status" and show available commands.
+
 ## Commands
-- gbos status - Check status
-- gbos tasks - List tasks
-- gbos continue - Get task prompt
-- gbos fallback - Cancel task
-- gbos auto - Auto-process
+
+| Command | Description |
+|---------|-------------|
+| gbos status | Show current status |
+| gbos tasks | List assigned tasks |
+| gbos continue | Get next task prompt |
+| gbos next | Preview next task |
+| gbos fallback | Cancel current task |
+| gbos auto | Auto-process tasks |
+| gbos add_task | Create new task |
 
 ## Workflow
-Run gbos continue to get tasks.
+
+1. Run \`gbos continue\` to get task
+2. Follow the instructions
+3. Run \`gbos continue\` for next task
 `,
 
   'AGENTS.md': () => `# GBOS Integration (Codex/Agents)
 
+When user mentions "/gbos" or asks about GBOS commands, execute "gbos status" and list available commands.
+
 ## Shell Commands
+
 \`\`\`bash
-gbos status      # Check connection
-gbos tasks       # List tasks
-gbos continue    # Get task prompt
-gbos fallback    # Cancel task
-gbos auto        # Auto-process
+gbos status      # Show current status
+gbos tasks       # List assigned tasks
+gbos continue    # Get next task prompt
+gbos next        # Preview next task
+gbos fallback    # Cancel current task
+gbos auto        # Auto-process tasks
+gbos add_task    # Create new task
 \`\`\`
 
 ## Workflow
-1. gbos continue - Get task
-2. Execute task
-3. gbos continue - Next task
+
+1. Run: gbos continue
+2. Execute the task
+3. Run: gbos continue (next task)
 `,
 };
 
