@@ -2,69 +2,108 @@ const path = require('path');
 const fs = require('fs');
 const { PNG } = require('pngjs');
 
-// ANSI color codes - Dark Purple Theme
-const colors = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  purple1: '\x1b[38;5;54m',
-  purple2: '\x1b[38;5;55m',
-  purple3: '\x1b[38;5;56m',
-  purple4: '\x1b[38;5;93m',
-  purple5: '\x1b[38;5;99m',
-  purple6: '\x1b[38;5;141m',
-  purple7: '\x1b[38;5;183m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
+// ANSI escape codes
+const ESC = '\x1b';
+const RESET = `${ESC}[0m`;
+const BOLD = `${ESC}[1m`;
+const DIM = `${ESC}[2m`;
+
+// True color ANSI helpers
+const fg = (r, g, b) => `${ESC}[38;2;${r};${g};${b}m`;
+const bg = (r, g, b) => `${ESC}[48;2;${r};${g};${b}m`;
+
+// Purple theme RGB values
+const PURPLE = {
+  dark: [75, 0, 130],      // Deep purple
+  medium: [128, 0, 128],   // Purple
+  light: [147, 112, 219],  // Medium purple
+  bright: [186, 85, 211],  // Medium orchid
+  pale: [216, 191, 216],   // Thistle
 };
 
-// ASCII characters for density mapping
-const ASCII_CHARS = ' .,:;i1tfLCG08@#';
+// 256-color fallback codes
+const colors = {
+  reset: RESET,
+  bold: BOLD,
+  dim: DIM,
+  purple4: `${ESC}[38;5;93m`,
+  purple5: `${ESC}[38;5;99m`,
+  purple6: `${ESC}[38;5;141m`,
+  purple7: `${ESC}[38;5;183m`,
+  white: `${ESC}[37m`,
+};
+
+// Unicode half-block characters
+const UPPER_HALF = '▀';
+const LOWER_HALF = '▄';
+const FULL_BLOCK = '█';
 
 // Get terminal width
 function getTerminalWidth() {
   return process.stdout.columns || 80;
 }
 
-// Convert PNG to ASCII art
-function imageToAscii(imagePath, width = 20) {
+// Sample pixel from PNG at given coordinates
+function samplePixel(png, x, y) {
+  const clampedX = Math.max(0, Math.min(Math.floor(x), png.width - 1));
+  const clampedY = Math.max(0, Math.min(Math.floor(y), png.height - 1));
+  const idx = (png.width * clampedY + clampedX) << 2;
+  return {
+    r: png.data[idx],
+    g: png.data[idx + 1],
+    b: png.data[idx + 2],
+    a: png.data[idx + 3],
+  };
+}
+
+// Check if pixel is transparent or white (background)
+function isBackground(pixel) {
+  return pixel.a < 50 || (pixel.r > 240 && pixel.g > 240 && pixel.b > 240);
+}
+
+// Convert PNG to true-color pixel art using half-blocks
+// Each character cell represents 2 vertical pixels
+function imageToPixels(imagePath, targetWidth = 24, targetHeight = 12) {
   try {
     const data = fs.readFileSync(imagePath);
     const png = PNG.sync.read(data);
 
-    const aspectRatio = 0.5;
-    const height = Math.floor((png.height / png.width) * width * aspectRatio);
-
-    const cellWidth = png.width / width;
-    const cellHeight = png.height / height;
+    // Each row of output = 2 rows of pixels (using half-blocks)
+    const pixelRows = targetHeight * 2;
+    const cellWidth = png.width / targetWidth;
+    const cellHeight = png.height / pixelRows;
 
     const lines = [];
 
-    for (let y = 0; y < height; y++) {
-      let row = '';
-      for (let x = 0; x < width; x++) {
-        const sampleX = Math.floor(x * cellWidth + cellWidth / 2);
-        const sampleY = Math.floor(y * cellHeight + cellHeight / 2);
-        const idx = (png.width * sampleY + sampleX) << 2;
+    for (let row = 0; row < targetHeight; row++) {
+      let line = '';
+      for (let col = 0; col < targetWidth; col++) {
+        // Sample top and bottom pixels for this cell
+        const topY = row * 2 * cellHeight + cellHeight / 2;
+        const bottomY = (row * 2 + 1) * cellHeight + cellHeight / 2;
+        const x = col * cellWidth + cellWidth / 2;
 
-        const r = png.data[idx];
-        const g = png.data[idx + 1];
-        const b = png.data[idx + 2];
-        const a = png.data[idx + 3];
+        const topPixel = samplePixel(png, x, topY);
+        const bottomPixel = samplePixel(png, x, bottomY);
 
-        if (a < 50 || (r > 240 && g > 240 && b > 240)) {
-          row += ' ';
-          continue;
+        const topBg = isBackground(topPixel);
+        const bottomBg = isBackground(bottomPixel);
+
+        if (topBg && bottomBg) {
+          // Both transparent - just a space
+          line += ' ';
+        } else if (topBg && !bottomBg) {
+          // Only bottom has color - use lower half block with fg color
+          line += fg(bottomPixel.r, bottomPixel.g, bottomPixel.b) + LOWER_HALF + RESET;
+        } else if (!topBg && bottomBg) {
+          // Only top has color - use upper half block with fg color
+          line += fg(topPixel.r, topPixel.g, topPixel.b) + UPPER_HALF + RESET;
+        } else {
+          // Both have color - use upper half with fg=top, bg=bottom
+          line += fg(topPixel.r, topPixel.g, topPixel.b) + bg(bottomPixel.r, bottomPixel.g, bottomPixel.b) + UPPER_HALF + RESET;
         }
-
-        const brightness = (r + g + b) / 3;
-        const charIndex = Math.floor((1 - brightness / 255) * (ASCII_CHARS.length - 1));
-        row += ASCII_CHARS[Math.max(0, Math.min(charIndex, ASCII_CHARS.length - 1))];
       }
-      lines.push(row);
+      lines.push(line);
     }
 
     return lines;
@@ -73,52 +112,121 @@ function imageToAscii(imagePath, width = 20) {
   }
 }
 
-// Compact text-based logo with horse
+// "gbos.io" pixel art (8 rows tall to match logo height)
+// Each character is approximately 5 wide, total ~35 wide
+function getGbosTextPixels() {
+  // 8-row pixel art for "gbos.io"
+  // Using purple gradient colors
+  const p1 = PURPLE.dark;
+  const p2 = PURPLE.medium;
+  const p3 = PURPLE.light;
+  const p4 = PURPLE.bright;
+
+  // Pixel art bitmap for "gbos.io" - 8 rows, each row is pairs of pixels
+  // 0 = transparent, 1-4 = purple shades
+  const bitmap = [
+    '  222  2222   222   2222       22   222  ',
+    ' 2   2 2   2 2   2 2          2  2 2   2 ',
+    ' 2     2   2 2   2 2         2    2   2  ',
+    ' 2 222 2222  2   2  222      2    2   2  ',
+    ' 2   2 2   2 2   2     2     2    2   2  ',
+    ' 2   2 2   2 2   2     2  22 2  2 2   2  ',
+    '  222  2222   222  2222   22  22   222   ',
+    '                                         ',
+  ];
+
+  const lines = [];
+  const colorMap = {
+    ' ': null,
+    '1': p1,
+    '2': p2,
+    '3': p3,
+    '4': p4,
+  };
+
+  // Process 2 bitmap rows at a time into 1 output row (half-block technique)
+  for (let row = 0; row < bitmap.length; row += 2) {
+    let line = '';
+    const topRow = bitmap[row] || '';
+    const bottomRow = bitmap[row + 1] || '';
+    const width = Math.max(topRow.length, bottomRow.length);
+
+    for (let col = 0; col < width; col++) {
+      const topChar = topRow[col] || ' ';
+      const bottomChar = bottomRow[col] || ' ';
+      const topColor = colorMap[topChar];
+      const bottomColor = colorMap[bottomChar];
+
+      if (!topColor && !bottomColor) {
+        line += ' ';
+      } else if (!topColor && bottomColor) {
+        line += fg(bottomColor[0], bottomColor[1], bottomColor[2]) + LOWER_HALF + RESET;
+      } else if (topColor && !bottomColor) {
+        line += fg(topColor[0], topColor[1], topColor[2]) + UPPER_HALF + RESET;
+      } else {
+        line += fg(topColor[0], topColor[1], topColor[2]) + bg(bottomColor[0], bottomColor[1], bottomColor[2]) + UPPER_HALF + RESET;
+      }
+    }
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+// Fallback compact logo
 const COMPACT_LOGO = [
-  `${colors.purple3}    ▄▀▀▀▄▄`,
-  `${colors.purple3}  ▄▀${colors.purple4}●${colors.purple3}    ▀▄`,
-  `${colors.purple4} █        █   ${colors.purple5}${colors.bold}gbos.io${colors.reset}`,
-  `${colors.purple4}  ▀▄    ▄▀`,
-  `${colors.purple5}    ▀▀▀▀`,
+  `${fg(...PURPLE.medium)}  ▄▀▀▀▄▄${RESET}`,
+  `${fg(...PURPLE.medium)}▄▀${fg(...PURPLE.bright)}●${fg(...PURPLE.medium)}    ▀▄${RESET}`,
+  `${fg(...PURPLE.light)}█        █${RESET}`,
+  `${fg(...PURPLE.light)} ▀▄    ▄▀${RESET}`,
+  `${fg(...PURPLE.bright)}   ▀▀▀▀${RESET}`,
 ];
+
+// Combine logo and text side by side
+function combineLogoAndText(logoLines, textLines) {
+  const combined = [];
+  const maxLines = Math.max(logoLines.length, textLines.length);
+  const logoStart = Math.floor((maxLines - logoLines.length) / 2);
+  const textStart = Math.floor((maxLines - textLines.length) / 2);
+
+  for (let i = 0; i < maxLines; i++) {
+    const logo = logoLines[i - logoStart] || '';
+    const text = textLines[i - textStart] || '';
+    combined.push(logo + '  ' + text);
+  }
+
+  return combined;
+}
 
 // Display logo with connection details
 function displayLogoWithDetails(details = null) {
-  const logoPath = path.join(__dirname, '../../images/logo.png'); // Use horse-only logo
+  const logoPath = path.join(__dirname, '../../images/logo.png');
   const termWidth = getTerminalWidth();
-  const logoWidth = 20;
-  const rightWidth = termWidth - logoWidth - 8;
 
-  let asciiLines = imageToAscii(logoPath, logoWidth);
+  // Render logo at ~24 chars wide, 6 rows tall (12 pixel rows with half-blocks)
+  let logoLines = imageToPixels(logoPath, 24, 6);
+  if (!logoLines) logoLines = COMPACT_LOGO;
 
-  // Color all ASCII lines purple and add "gbos.io" text
-  if (asciiLines && asciiLines.length > 0) {
-    asciiLines = asciiLines.map((line, idx) => {
-      const coloredLine = colors.purple3 + line + colors.reset;
-      const midPoint = Math.floor(asciiLines.length / 2);
-      if (idx === midPoint) {
-        return coloredLine + `  ${colors.purple5}${colors.bold}gbos.io${colors.reset}`;
-      }
-      return coloredLine;
-    });
-  }
+  // Get pixel art text
+  const textLines = getGbosTextPixels();
 
-  if (!asciiLines) {
-    asciiLines = COMPACT_LOGO;
-  }
+  // Combine logo and text
+  const leftSide = combineLogoAndText(logoLines, textLines);
+  const leftWidth = 70; // Account for escape codes
 
   // Build right side (details box)
+  const rightWidth = Math.max(30, termWidth - 75);
   const rightLines = [];
 
   if (details) {
-    rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${colors.reset}`);
-    rightLines.push(`${colors.purple4}│${colors.reset} ${colors.bold}${colors.purple5}Connected${colors.reset}${' '.repeat(rightWidth - 12)}${colors.purple4}│${colors.reset}`);
-    rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${colors.reset}`);
+    rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${RESET}`);
+    rightLines.push(`${colors.purple4}│${RESET} ${BOLD}${colors.purple5}Connected${RESET}${' '.repeat(rightWidth - 12)}${colors.purple4}│${RESET}`);
+    rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${RESET}`);
 
     const addField = (label, value, valueColor = colors.white) => {
       const val = (value || 'N/A').toString().substring(0, rightWidth - label.length - 6);
       const padding = ' '.repeat(Math.max(0, rightWidth - label.length - val.length - 5));
-      rightLines.push(`${colors.purple4}│${colors.reset} ${colors.purple7}${label}${colors.reset} ${valueColor}${val}${colors.reset}${padding}${colors.purple4}│${colors.reset}`);
+      rightLines.push(`${colors.purple4}│${RESET} ${colors.purple7}${label}${RESET} ${valueColor}${val}${RESET}${padding}${colors.purple4}│${RESET}`);
     };
 
     addField('Account:', details.accountName, colors.white);
@@ -129,20 +237,22 @@ function displayLogoWithDetails(details = null) {
       addField('Conn:', details.connectionId.substring(0, 18) + '...', colors.dim);
     }
 
-    rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${colors.reset}`);
+    rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${RESET}`);
   }
 
   // Print side by side
   console.log('');
-  const maxLines = Math.max(asciiLines.length, rightLines.length);
-  const logoStart = Math.floor((maxLines - asciiLines.length) / 2);
-  const detailStart = Math.floor((maxLines - rightLines.length) / 2);
+  const maxLines = Math.max(leftSide.length, rightLines.length);
+  const leftStart = Math.floor((maxLines - leftSide.length) / 2);
+  const rightStart = Math.floor((maxLines - rightLines.length) / 2);
 
   for (let i = 0; i < maxLines; i++) {
-    const left = asciiLines[i - logoStart] || '';
-    const right = rightLines[i - detailStart] || '';
-    const paddedLeft = left.padEnd(logoWidth + 30); // Account for color codes
-    console.log(`  ${paddedLeft}  ${right}`);
+    const left = leftSide[i - leftStart] || '';
+    const right = rightLines[i - rightStart] || '';
+    // Pad left side accounting for ANSI codes (rough estimate)
+    const visibleLen = left.replace(/\x1b\[[0-9;]*m/g, '').length;
+    const padding = ' '.repeat(Math.max(0, leftWidth - visibleLen));
+    console.log(`  ${left}${padding}${right}`);
   }
   console.log('');
 }
@@ -152,63 +262,56 @@ function displayLogo() {
 }
 
 function displayAuthSuccess(data) {
-  const termWidth = getTerminalWidth();
-  const logoWidth = 20;
-  const rightWidth = termWidth - logoWidth - 8;
-
   const logoPath = path.join(__dirname, '../../images/logo.png');
-  let asciiLines = imageToAscii(logoPath, logoWidth);
+  const termWidth = getTerminalWidth();
 
-  // Color all ASCII lines purple and add "gbos.io" text
-  if (asciiLines && asciiLines.length > 0) {
-    const midPoint = Math.floor(asciiLines.length / 2);
-    asciiLines = asciiLines.map((line, idx) => {
-      const coloredLine = colors.purple3 + line + colors.reset;
-      if (idx === midPoint) {
-        return coloredLine + `  ${colors.purple5}${colors.bold}gbos.io${colors.reset}`;
-      }
-      return coloredLine;
-    });
-  }
+  let logoLines = imageToPixels(logoPath, 24, 6);
+  if (!logoLines) logoLines = COMPACT_LOGO;
 
-  if (!asciiLines) asciiLines = COMPACT_LOGO;
+  const textLines = getGbosTextPixels();
+  const leftSide = combineLogoAndText(logoLines, textLines);
+  const leftWidth = 70;
 
+  const rightWidth = Math.max(30, termWidth - 75);
   const rightLines = [];
-  rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${colors.reset}`);
-  rightLines.push(`${colors.purple4}│${colors.reset} ${colors.bold}${colors.purple5}✓ Authenticated${colors.reset}${' '.repeat(rightWidth - 18)}${colors.purple4}│${colors.reset}`);
-  rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${colors.reset}`);
+
+  rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${RESET}`);
+  rightLines.push(`${colors.purple4}│${RESET} ${BOLD}${colors.purple5}✓ Authenticated${RESET}${' '.repeat(rightWidth - 18)}${colors.purple4}│${RESET}`);
+  rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${RESET}`);
 
   const addField = (label, value) => {
     const val = (value || 'N/A').toString().substring(0, rightWidth - label.length - 6);
     const padding = ' '.repeat(Math.max(0, rightWidth - label.length - val.length - 5));
-    rightLines.push(`${colors.purple4}│${colors.reset} ${colors.purple7}${label}${colors.reset} ${colors.white}${val}${colors.reset}${padding}${colors.purple4}│${colors.reset}`);
+    rightLines.push(`${colors.purple4}│${RESET} ${colors.purple7}${label}${RESET} ${colors.white}${val}${RESET}${padding}${colors.purple4}│${RESET}`);
   };
 
   addField('User:', data.userId);
   addField('Account:', data.accountId);
   addField('Session:', (data.sessionId || '').substring(0, 24) + '...');
 
-  rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${colors.reset}`);
+  rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${RESET}`);
   rightLines.push('');
-  rightLines.push(`${colors.purple7}${colors.dim}Run "gbos connect" to connect${colors.reset}`);
+  rightLines.push(`${colors.purple7}${DIM}Run "gbos connect" to connect${RESET}`);
 
   console.log('');
-  const maxLines = Math.max(asciiLines.length, rightLines.length);
-  const logoStart = Math.floor((maxLines - asciiLines.length) / 2);
-  const detailStart = Math.floor((maxLines - rightLines.length) / 2);
+  const maxLines = Math.max(leftSide.length, rightLines.length);
+  const leftStart = Math.floor((maxLines - leftSide.length) / 2);
+  const rightStart = Math.floor((maxLines - rightLines.length) / 2);
 
   for (let i = 0; i < maxLines; i++) {
-    const left = asciiLines[i - logoStart] || '';
-    const right = rightLines[i - detailStart] || '';
-    console.log(`  ${left.padEnd(logoWidth + 30)}  ${right}`);
+    const left = leftSide[i - leftStart] || '';
+    const right = rightLines[i - rightStart] || '';
+    const visibleLen = left.replace(/\x1b\[[0-9;]*m/g, '').length;
+    const padding = ' '.repeat(Math.max(0, leftWidth - visibleLen));
+    console.log(`  ${left}${padding}${right}`);
   }
   console.log('');
 }
 
 function displayConnectSuccess(data) {
   displayLogoWithDetails(data);
-  console.log(`  ${colors.purple5}✓${colors.reset} ${colors.bold}${colors.purple6}Ready to work!${colors.reset}`);
-  console.log(`  ${colors.dim}${colors.purple7}Session: ~/.gbos/session.json${colors.reset}\n`);
+  console.log(`  ${colors.purple5}✓${RESET} ${BOLD}${colors.purple6}Ready to work!${RESET}`);
+  console.log(`  ${DIM}${colors.purple7}Session: ~/.gbos/session.json${RESET}\n`);
 }
 
 function displaySessionSummary(data) {
@@ -216,29 +319,29 @@ function displaySessionSummary(data) {
 }
 
 function displayMessageBox(title, message, type = 'info') {
-  const colorMap = { info: colors.purple4, success: colors.purple5, warning: colors.yellow, error: colors.red };
+  const colorMap = { info: colors.purple4, success: colors.purple5, warning: `${ESC}[33m`, error: `${ESC}[31m` };
   const color = colorMap[type] || colors.purple4;
   const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠' : type === 'error' ? '✗' : 'ℹ';
   const width = Math.min(55, getTerminalWidth() - 4);
 
-  console.log(`\n${color}┌${'─'.repeat(width)}┐${colors.reset}`);
-  console.log(`${color}│${colors.reset} ${icon} ${colors.bold}${colors.purple6}${title.substring(0, width - 5).padEnd(width - 4)}${colors.reset}${color}│${colors.reset}`);
-  console.log(`${color}├${'─'.repeat(width)}┤${colors.reset}`);
+  console.log(`\n${color}┌${'─'.repeat(width)}┐${RESET}`);
+  console.log(`${color}│${RESET} ${icon} ${BOLD}${colors.purple6}${title.substring(0, width - 5).padEnd(width - 4)}${RESET}${color}│${RESET}`);
+  console.log(`${color}├${'─'.repeat(width)}┤${RESET}`);
 
   const words = message.split(' ');
   let currentLine = '';
   for (const word of words) {
     if ((currentLine + ' ' + word).trim().length > width - 4) {
-      console.log(`${color}│${colors.reset} ${colors.purple7}${currentLine.trim().padEnd(width - 2)}${colors.reset}${color}│${colors.reset}`);
+      console.log(`${color}│${RESET} ${colors.purple7}${currentLine.trim().padEnd(width - 2)}${RESET}${color}│${RESET}`);
       currentLine = word;
     } else {
       currentLine = currentLine ? currentLine + ' ' + word : word;
     }
   }
   if (currentLine) {
-    console.log(`${color}│${colors.reset} ${colors.purple7}${currentLine.trim().padEnd(width - 2)}${colors.reset}${color}│${colors.reset}`);
+    console.log(`${color}│${RESET} ${colors.purple7}${currentLine.trim().padEnd(width - 2)}${RESET}${color}│${RESET}`);
   }
-  console.log(`${color}└${'─'.repeat(width)}┘${colors.reset}\n`);
+  console.log(`${color}└${'─'.repeat(width)}┘${RESET}\n`);
 }
 
 module.exports = {
@@ -249,6 +352,6 @@ module.exports = {
   displayAuthSuccess,
   displayConnectSuccess,
   displayMessageBox,
-  imageToAscii,
+  imageToPixels,
   getTerminalWidth,
 };
