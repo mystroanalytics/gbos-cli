@@ -357,11 +357,11 @@ const COMPACT_LOGO = [
 
 // Display logo with connection details (Claude Code style - clean, minimal)
 function displayLogoWithDetails(details = null) {
-  const logoPath = path.join(__dirname, '../../images/logo-2-clean.png');
+  const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~20 chars wide, 5 rows tall with high alpha threshold
-  let logoLines = imageToPixels(logoPath, 20, 5, {
+  // Render logo at ~8 chars wide, 3 rows tall with high alpha threshold
+  let logoLines = imageToPixels(logoPath, 8, 3, {
     alphaThreshold: 220,
     crop: true,
     cropAlphaThreshold: 220,
@@ -369,13 +369,13 @@ function displayLogoWithDetails(details = null) {
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 28; // Account for escape codes
+  const logoWidth = 14; // Account for escape codes
 
   // Build right side - Claude Code style (clean lines, no boxes)
   const rightLines = [];
 
   if (details) {
-    rightLines.push(`${BOLD}${colors.purple5}GBOS${RESET} ${DIM}v${version}${RESET}`);
+    rightLines.push(`${BOLD}${colors.purple5}gbos.io${RESET} ${DIM}v${version}${RESET}`);
     rightLines.push(`${colors.white}${details.accountName || 'N/A'}${RESET} ${DIM}·${RESET} ${colors.purple5}${details.applicationName || 'N/A'}${RESET}`);
     rightLines.push(`${DIM}${details.nodeName || 'N/A'}${RESET}`);
   }
@@ -401,10 +401,10 @@ function displayLogo() {
 }
 
 function displayAuthSuccess(data) {
-  const logoPath = path.join(__dirname, '../../images/logo-2-clean.png');
+  const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 20, 5, {
+  let logoLines = imageToPixels(logoPath, 8, 3, {
     alphaThreshold: 220,
     crop: true,
     cropAlphaThreshold: 220,
@@ -412,10 +412,10 @@ function displayAuthSuccess(data) {
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 28;
+  const logoWidth = 14;
 
   const rightLines = [];
-  rightLines.push(`${BOLD}${colors.purple5}GBOS${RESET} ${DIM}v${version}${RESET}`);
+  rightLines.push(`${BOLD}${colors.purple5}gbos.io${RESET} ${DIM}v${version}${RESET}`);
   rightLines.push(`${colors.purple5}✓${RESET} ${colors.white}Authenticated${RESET}`);
   rightLines.push(`${colors.white}${data.userName || 'N/A'}${RESET} ${DIM}·${RESET} ${colors.purple5}${data.accountName || 'N/A'}${RESET}`);
   rightLines.push('');
