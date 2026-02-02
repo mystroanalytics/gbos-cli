@@ -9,11 +9,11 @@ async function logoCommand() {
   await displayImage(logoPath, {
     width: targetWidth,
     fallbackWidth: targetWidth,
-    fallbackHeight: 9,
+    fallbackHeight: 7,
     sharp: false,
     crop: true,
-    alphaThreshold: 120,
-    cropAlphaThreshold: 120,
+    alphaThreshold: 100,
+    cropAlphaThreshold: 100,
   });
 }
 
