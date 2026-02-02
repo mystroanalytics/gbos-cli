@@ -2,22 +2,6 @@ const api = require('../lib/api');
 const config = require('../lib/config');
 const { checkForUpdates } = require('../lib/version');
 const { displayAuthSuccess, displayMessageBox } = require('../lib/display');
-const readline = require('readline');
-
-// Simple prompt for email
-async function promptEmail() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question('Enter your email address: ', (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
 
 // Sleep helper
 function sleep(ms) {
@@ -34,7 +18,9 @@ async function authCommand(options) {
   // Check if already authenticated
   if (config.isAuthenticated() && !options.force) {
     const session = config.loadSession();
-    const userName = session.user_name || session.user_email || `User ${session.user_id}`;
+    const userName = session.user_first_name && session.user_last_name
+      ? `${session.user_first_name} ${session.user_last_name}`
+      : session.user_name || `User ${session.user_id}`;
     const accountName = session.account_name || `Account ${session.account_id}`;
     displayMessageBox(
       'Already Authenticated',
@@ -45,18 +31,10 @@ async function authCommand(options) {
   }
 
   try {
-    // Get email from user
-    const email = options.email || (await promptEmail());
-
-    if (!email || !email.includes('@')) {
-      displayMessageBox('Invalid Email', 'Please enter a valid email address.', 'error');
-      process.exit(1);
-    }
-
-    console.log(`\nInitializing authentication for: ${email}`);
+    console.log('\nInitializing authentication...');
 
     // Initialize device auth flow
-    const initResponse = await api.initAuth({ email });
+    const initResponse = await api.initAuth({});
     const { device_code, verification_code, verification_url_complete, interval, expires_in } =
       initResponse.data;
 
@@ -113,6 +91,8 @@ async function authCommand(options) {
             user_id,
             user_name,
             user_email,
+            user_first_name,
+            user_last_name,
             account_id,
             account_name,
             session_id,
@@ -122,13 +102,20 @@ async function authCommand(options) {
           const expiresInSeconds = tokenExpires && tokenExpires > 60 ? tokenExpires : 86400;
           const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
+          // Build display name from first_name + last_name
+          const displayUserName = user_first_name && user_last_name
+            ? `${user_first_name} ${user_last_name}`
+            : user_name || `User ${user_id}`;
+
           // Save session with names
           config.saveSession({
             access_token,
             refresh_token,
             token_expires_at: tokenExpiresAt,
             user_id,
-            user_name: user_name || user_email || `User ${user_id}`,
+            user_name: displayUserName,
+            user_first_name,
+            user_last_name,
             user_email,
             account_id,
             account_name: account_name || `Account ${account_id}`,
@@ -138,7 +125,7 @@ async function authCommand(options) {
 
           // Display success with logo - use names
           displayAuthSuccess({
-            userName: user_name || user_email || `User ${user_id}`,
+            userName: displayUserName,
             accountName: account_name || `Account ${account_id}`,
             sessionId: session_id,
           });

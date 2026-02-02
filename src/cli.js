@@ -77,7 +77,9 @@ program
       return;
     }
 
-    const userName = session.user_name || session.user_email || `User ${session.user_id}`;
+    const userName = session.user_first_name && session.user_last_name
+      ? `${session.user_first_name} ${session.user_last_name}`
+      : session.user_name || `User ${session.user_id}`;
     const accountName = session.account_name || `Account ${session.account_id}`;
 
     console.log('\n┌─────────────────────────────────────────────────────────────┐');
