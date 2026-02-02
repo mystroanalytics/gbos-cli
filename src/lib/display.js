@@ -207,42 +207,55 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5, options = 
         const bottomCov = bottomRegion.coverage;
 
         // Both empty
-        if (topCov < 0.1 && bottomCov < 0.1) {
+        if (topCov < 0.05 && bottomCov < 0.05) {
           line += ' ';
           continue;
         }
 
-        // Use dots for very light coverage (edges)
-        if (topCov < 0.3 && bottomCov < 0.3) {
+        // Very light coverage on both - use dots for smooth curves
+        if (topCov < 0.2 && bottomCov < 0.2) {
           const avgCov = (topCov + bottomCov) / 2;
           const r = topCov > bottomCov ? topRegion.r : bottomRegion.r;
           const g = topCov > bottomCov ? topRegion.g : bottomRegion.g;
           const b = topCov > bottomCov ? topRegion.b : bottomRegion.b;
-          if (avgCov < 0.15) {
+          if (avgCov < 0.08) {
             line += fg(r, g, b) + '·' + RESET;
-          } else {
+          } else if (avgCov < 0.15) {
             line += fg(r, g, b) + '░' + RESET;
+          } else {
+            line += fg(r, g, b) + '▒' + RESET;
           }
           continue;
         }
 
-        // Light top, solid bottom - use lower block with possible shading
-        if (topCov < 0.3 && bottomCov >= 0.3) {
-          if (topCov > 0.1) {
-            // Add dot above
+        // Light top (edge), more solid bottom
+        if (topCov < 0.4 && bottomCov >= 0.2) {
+          if (topCov < 0.1) {
+            line += fg(bottomRegion.r, bottomRegion.g, bottomRegion.b) + LOWER_HALF + RESET;
+          } else if (topCov < 0.2) {
+            // Light edge on top - use lower block (curve effect)
             line += fg(bottomRegion.r, bottomRegion.g, bottomRegion.b) + '▄' + RESET;
           } else {
-            line += fg(bottomRegion.r, bottomRegion.g, bottomRegion.b) + LOWER_HALF + RESET;
+            // Partial coverage - blend
+            line += fg(topRegion.r, topRegion.g, topRegion.b) +
+                    bg(bottomRegion.r, bottomRegion.g, bottomRegion.b) +
+                    UPPER_HALF + RESET;
           }
           continue;
         }
 
-        // Solid top, light bottom
-        if (topCov >= 0.3 && bottomCov < 0.3) {
-          if (bottomCov > 0.1) {
+        // More solid top, light bottom (edge)
+        if (topCov >= 0.2 && bottomCov < 0.4) {
+          if (bottomCov < 0.1) {
+            line += fg(topRegion.r, topRegion.g, topRegion.b) + UPPER_HALF + RESET;
+          } else if (bottomCov < 0.2) {
+            // Light edge on bottom - use upper block (curve effect)
             line += fg(topRegion.r, topRegion.g, topRegion.b) + '▀' + RESET;
           } else {
-            line += fg(topRegion.r, topRegion.g, topRegion.b) + UPPER_HALF + RESET;
+            // Partial coverage - blend
+            line += fg(topRegion.r, topRegion.g, topRegion.b) +
+                    bg(bottomRegion.r, bottomRegion.g, bottomRegion.b) +
+                    UPPER_HALF + RESET;
           }
           continue;
         }
@@ -298,16 +311,16 @@ function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~20 chars wide, 8 rows tall with smooth edges and dots
-  let logoLines = imageToPixels(logoPath, 20, 8, {
-    alphaThreshold: 180,
+  // Render logo at ~22 chars wide, 9 rows tall with smooth curved edges
+  let logoLines = imageToPixels(logoPath, 22, 9, {
+    alphaThreshold: 120,
     crop: true,
-    cropAlphaThreshold: 180,
+    cropAlphaThreshold: 120,
     sampleMode: 'coverage',
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 26; // Account for escape codes
+  const logoWidth = 28; // Account for escape codes
 
   // Build right side - Claude Code style (clean lines, no boxes)
   const rightLines = [];
@@ -342,15 +355,15 @@ function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 20, 8, {
-    alphaThreshold: 180,
+  let logoLines = imageToPixels(logoPath, 22, 9, {
+    alphaThreshold: 120,
     crop: true,
-    cropAlphaThreshold: 180,
+    cropAlphaThreshold: 120,
     sampleMode: 'coverage',
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const logoWidth = 26;
+  const logoWidth = 28;
 
   const rightLines = [];
   rightLines.push(`${BOLD}${colors.purple5}gbos.io${RESET} ${DIM}v${version}${RESET}`);
