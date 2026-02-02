@@ -1,0 +1,53 @@
+# GBOS Integration for Cursor
+
+Copy this content to your project's `.cursorrules` file.
+
+---
+
+## GBOS Task Management System
+
+This project uses GBOS (Generative Business Operating System) for coordinated task management.
+
+### Terminal Commands
+
+Use these commands in the integrated terminal:
+
+| Command | Description |
+|---------|-------------|
+| `gbos status` | Check connection status |
+| `gbos tasks` | List assigned tasks |
+| `gbos next_task` | Preview next task |
+| `gbos continue` | Get task prompt to work on |
+| `gbos fallback` | Cancel current task |
+| `gbos auto` | Auto-process tasks |
+
+### Workflow Instructions
+
+1. **Before starting**: Run `gbos status` to verify connection
+2. **Get work**: Run `gbos continue` to receive your task
+3. **Execute task**: Follow the provided instructions exactly
+4. **Iterate**: Run `gbos continue` again for next task
+
+### Task Prompt Structure
+
+When `gbos continue` runs, you receive:
+- **Task ID**: Reference identifier
+- **Instructions**: What needs to be done
+- **Metadata**: Additional context in JSON
+- **Attachments**: URLs to relevant files
+
+### Best Practices
+
+- Always read the complete task before starting
+- Check metadata for specific requirements
+- Download and review attachments when provided
+- Use `gbos fallback` only when necessary
+- Run `gbos auto` for continuous task processing
+
+### Error Handling
+
+If a task fails:
+1. Run `gbos fallback` to cancel
+2. Check `gbos status` for connection issues
+3. Run `gbos tasks` to see task queue
+4. Try `gbos continue` for next task

@@ -125,8 +125,20 @@ class GbosApiClient {
   }
 
   // Task endpoints
+  async getTasks() {
+    return this.request('/cli/tasks', {
+      method: 'GET',
+    });
+  }
+
   async getNextTask() {
     return this.request('/cli/tasks/next', {
+      method: 'GET',
+    });
+  }
+
+  async getTask(taskId) {
+    return this.request(`/cli/tasks/${taskId}`, {
       method: 'GET',
     });
   }
@@ -148,6 +160,19 @@ class GbosApiClient {
     return this.request(`/cli/tasks/${taskId}/fail`, {
       method: 'POST',
       body: data,
+    });
+  }
+
+  async cancelTask(taskId, data = {}) {
+    return this.request(`/cli/tasks/${taskId}/cancel`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async getCurrentTask() {
+    return this.request('/cli/tasks/current', {
+      method: 'GET',
     });
   }
 
