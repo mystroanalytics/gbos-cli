@@ -311,11 +311,11 @@ function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~22 chars wide, 9 rows tall with smooth curved edges
-  let logoLines = imageToPixels(logoPath, 22, 9, {
-    alphaThreshold: 120,
+  // Render logo at ~22 chars wide, 7 rows tall with smooth curved edges
+  let logoLines = imageToPixels(logoPath, 22, 7, {
+    alphaThreshold: 100,
     crop: true,
-    cropAlphaThreshold: 120,
+    cropAlphaThreshold: 100,
     sampleMode: 'coverage',
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
@@ -355,10 +355,10 @@ function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 22, 9, {
-    alphaThreshold: 120,
+  let logoLines = imageToPixels(logoPath, 22, 7, {
+    alphaThreshold: 100,
     crop: true,
-    cropAlphaThreshold: 120,
+    cropAlphaThreshold: 100,
     sampleMode: 'coverage',
   });
   if (!logoLines) logoLines = COMPACT_LOGO;
