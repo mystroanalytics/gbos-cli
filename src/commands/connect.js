@@ -174,17 +174,21 @@ async function connectCommand(options) {
 
     const { connection_id, node } = connectResponse.data;
 
-    // Get session info for account name
-    let accountName = 'N/A';
-    try {
-      const sessionInfo = await api.getSession();
-      accountName = sessionInfo.data?.account?.name || 'N/A';
-    } catch (e) {
-      // Ignore session fetch errors
+    // Get session info (already has account_name from auth)
+    const session = config.loadSession() || {};
+
+    // Try to get account name from session API if not stored
+    let accountName = session.account_name;
+    if (!accountName) {
+      try {
+        const sessionInfo = await api.getSession();
+        accountName = sessionInfo.data?.account?.name || `Account ${session.account_id}`;
+      } catch (e) {
+        accountName = `Account ${session.account_id}`;
+      }
     }
 
     // Save connection to session
-    const session = config.loadSession() || {};
     config.saveConnection({
       connection_id,
       node: {
@@ -208,12 +212,8 @@ async function connectCommand(options) {
     // Display success with logo and summary
     displayConnectSuccess({
       accountName: accountName,
-      accountId: session.account_id,
       applicationName: selectedApplication?.name || 'N/A',
       nodeName: node.name,
-      nodeId: node.id,
-      connectionId: connection_id,
-      userId: session.user_id,
     });
 
   } catch (error) {
