@@ -389,8 +389,8 @@ function displayAuthSuccess(data) {
 
 function displayConnectSuccess(data) {
   displayLogoWithDetails(data);
-  console.log(`  ${colors.purple5}✓${RESET} ${BOLD}${colors.purple6}Ready to work!${RESET}`);
-  console.log(`  ${DIM}${colors.purple7}Session: ~/.gbos/session.json${RESET}\n`);
+  console.log(`  ${colors.purple5}✓${RESET} ${BOLD}${colors.purple6}Connected!${RESET}`);
+  console.log(`  ${DIM}${colors.purple7}Run your favorite coding agent in this CLI to start working.${RESET}\n`);
 }
 
 function displaySessionSummary(data) {
