@@ -109,28 +109,35 @@ async function authCommand(options) {
             refresh_token,
             expires_in: tokenExpires,
             user_id,
+            user_name,
+            user_email,
             account_id,
+            account_name,
             session_id,
           } = statusResponse.data;
 
-          // Calculate token expiration
-          const tokenExpiresAt = new Date(Date.now() + tokenExpires * 1000).toISOString();
+          // Calculate token expiration - default to 24 hours if not provided or too short
+          const expiresInSeconds = tokenExpires && tokenExpires > 60 ? tokenExpires : 86400;
+          const tokenExpiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
-          // Save session
+          // Save session with names
           config.saveSession({
             access_token,
             refresh_token,
             token_expires_at: tokenExpiresAt,
             user_id,
+            user_name: user_name || user_email || `User ${user_id}`,
+            user_email,
             account_id,
+            account_name: account_name || `Account ${account_id}`,
             session_id,
             authenticated_at: new Date().toISOString(),
           });
 
-          // Display success with logo
+          // Display success with logo - use names
           displayAuthSuccess({
-            userId: user_id,
-            accountId: account_id,
+            userName: user_name || user_email || `User ${user_id}`,
+            accountName: account_name || `Account ${account_id}`,
             sessionId: session_id,
           });
 

@@ -198,10 +198,10 @@ function combineLogoAndText(logoLines, textLines) {
   return combined;
 }
 
-// Display logo with connection details
+// Display logo with connection details (Claude Code style - clean, minimal)
 function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
-  const termWidth = getTerminalWidth();
+  const version = require('../../package.json').version;
 
   // Render logo at ~24 chars wide, 6 rows tall (12 pixel rows with half-blocks)
   let logoLines = imageToPixels(logoPath, 24, 6);
@@ -214,30 +214,16 @@ function displayLogoWithDetails(details = null) {
   const leftSide = combineLogoAndText(logoLines, textLines);
   const leftWidth = 70; // Account for escape codes
 
-  // Build right side (details box)
-  const rightWidth = Math.max(30, termWidth - 75);
+  // Build right side - Claude Code style (clean lines, no boxes)
   const rightLines = [];
 
   if (details) {
-    rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${RESET}`);
-    rightLines.push(`${colors.purple4}│${RESET} ${BOLD}${colors.purple5}Connected${RESET}${' '.repeat(rightWidth - 12)}${colors.purple4}│${RESET}`);
-    rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${RESET}`);
-
-    const addField = (label, value, valueColor = colors.white) => {
-      const val = (value || 'N/A').toString().substring(0, rightWidth - label.length - 6);
-      const padding = ' '.repeat(Math.max(0, rightWidth - label.length - val.length - 5));
-      rightLines.push(`${colors.purple4}│${RESET} ${colors.purple7}${label}${RESET} ${valueColor}${val}${RESET}${padding}${colors.purple4}│${RESET}`);
-    };
-
-    addField('Account:', details.accountName, colors.white);
-    addField('App:', details.applicationName, colors.purple5);
-    addField('Node:', details.nodeName, colors.purple4);
-    addField('ID:', details.nodeId, colors.dim);
-    if (details.connectionId) {
-      addField('Conn:', details.connectionId.substring(0, 18) + '...', colors.dim);
-    }
-
-    rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${RESET}`);
+    // Title line with version
+    rightLines.push(`${BOLD}${colors.purple5}GBOS${RESET} ${DIM}v${version}${RESET}`);
+    // Account and App on same line
+    rightLines.push(`${colors.white}${details.accountName || 'N/A'}${RESET} ${DIM}·${RESET} ${colors.purple5}${details.applicationName || 'N/A'}${RESET}`);
+    // Node info
+    rightLines.push(`${DIM}${details.nodeName || 'N/A'}${RESET}`);
   }
 
   // Print side by side
@@ -263,7 +249,7 @@ function displayLogo() {
 
 function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
-  const termWidth = getTerminalWidth();
+  const version = require('../../package.json').version;
 
   let logoLines = imageToPixels(logoPath, 24, 6);
   if (!logoLines) logoLines = COMPACT_LOGO;
@@ -272,26 +258,13 @@ function displayAuthSuccess(data) {
   const leftSide = combineLogoAndText(logoLines, textLines);
   const leftWidth = 70;
 
-  const rightWidth = Math.max(30, termWidth - 75);
+  // Claude Code style - clean lines, no boxes
   const rightLines = [];
-
-  rightLines.push(`${colors.purple4}┌${'─'.repeat(rightWidth - 2)}┐${RESET}`);
-  rightLines.push(`${colors.purple4}│${RESET} ${BOLD}${colors.purple5}✓ Authenticated${RESET}${' '.repeat(rightWidth - 18)}${colors.purple4}│${RESET}`);
-  rightLines.push(`${colors.purple4}├${'─'.repeat(rightWidth - 2)}┤${RESET}`);
-
-  const addField = (label, value) => {
-    const val = (value || 'N/A').toString().substring(0, rightWidth - label.length - 6);
-    const padding = ' '.repeat(Math.max(0, rightWidth - label.length - val.length - 5));
-    rightLines.push(`${colors.purple4}│${RESET} ${colors.purple7}${label}${RESET} ${colors.white}${val}${RESET}${padding}${colors.purple4}│${RESET}`);
-  };
-
-  addField('User:', data.userId);
-  addField('Account:', data.accountId);
-  addField('Session:', (data.sessionId || '').substring(0, 24) + '...');
-
-  rightLines.push(`${colors.purple4}└${'─'.repeat(rightWidth - 2)}┘${RESET}`);
+  rightLines.push(`${BOLD}${colors.purple5}GBOS${RESET} ${DIM}v${version}${RESET}`);
+  rightLines.push(`${colors.purple5}✓${RESET} ${colors.white}Authenticated${RESET}`);
+  rightLines.push(`${colors.white}${data.userName || 'N/A'}${RESET} ${DIM}·${RESET} ${colors.purple5}${data.accountName || 'N/A'}${RESET}`);
   rightLines.push('');
-  rightLines.push(`${colors.purple7}${DIM}Run "gbos connect" to connect${RESET}`);
+  rightLines.push(`${DIM}Run "gbos connect" to connect${RESET}`);
 
   console.log('');
   const maxLines = Math.max(leftSide.length, rightLines.length);
