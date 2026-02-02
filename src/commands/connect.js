@@ -1,5 +1,7 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
+const { checkForUpdates } = require('../lib/version');
+const { displayConnectSuccess, displayMessageBox } = require('../lib/display');
 const readline = require('readline');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -53,9 +55,16 @@ function getGitInfo() {
 }
 
 async function connectCommand(options) {
+  // Check for updates first
+  await checkForUpdates();
+
   // Check authentication
   if (!config.isAuthenticated()) {
-    console.log('\nNot authenticated. Please run "gbos auth" first.\n');
+    displayMessageBox(
+      'Not Authenticated',
+      'Please run "gbos auth" first to authenticate.',
+      'warning'
+    );
     process.exit(1);
   }
 
@@ -63,9 +72,11 @@ async function connectCommand(options) {
     // Check if already connected
     const currentConnection = config.getConnection();
     if (currentConnection && !options.force) {
-      console.log(`\nAlready connected to node: ${currentConnection.node?.name}`);
-      console.log(`Connection ID: ${currentConnection.connection_id}`);
-      console.log(`\nUse --force to reconnect or 'gbos disconnect' first.\n`);
+      displayMessageBox(
+        'Already Connected',
+        `Connected to node: ${currentConnection.node?.name}. Use --force to reconnect or "gbos disconnect" first.`,
+        'info'
+      );
       return;
     }
 
@@ -76,8 +87,11 @@ async function connectCommand(options) {
     const nodes = nodesResponse.data || [];
 
     if (nodes.length === 0) {
-      console.log('No development nodes available.');
-      console.log('Please create a development node in the GBOS web interface.\n');
+      displayMessageBox(
+        'No Nodes Available',
+        'No development nodes available. Please create a development node in the GBOS web interface.',
+        'warning'
+      );
       process.exit(1);
     }
 
@@ -117,6 +131,7 @@ async function connectCommand(options) {
 
     // Get nodes for selected application
     const appNodes = nodesByApp[selectedApp.id].nodes;
+    const selectedApplication = nodesByApp[selectedApp.id].application;
 
     // Let user select a node
     const nodeOptions = appNodes.map((node) => ({
@@ -134,8 +149,11 @@ async function connectCommand(options) {
 
     // Check if node is busy
     if (selectedNode.is_connected && selectedNode.active_connection) {
-      console.log(`\nNode "${selectedNode.name}" is already connected by another user.`);
-      console.log('Please select a different node.\n');
+      displayMessageBox(
+        'Node Busy',
+        `Node "${selectedNode.name}" is already connected by another user. Please select a different node.`,
+        'warning'
+      );
       return;
     }
 
@@ -156,7 +174,17 @@ async function connectCommand(options) {
 
     const { connection_id, node } = connectResponse.data;
 
+    // Get session info for account name
+    let accountName = 'N/A';
+    try {
+      const sessionInfo = await api.getSession();
+      accountName = sessionInfo.data?.account?.name || 'N/A';
+    } catch (e) {
+      // Ignore session fetch errors
+    }
+
     // Save connection to session
+    const session = config.loadSession() || {};
     config.saveConnection({
       connection_id,
       node: {
@@ -167,40 +195,36 @@ async function connectCommand(options) {
         system_prompt: node.system_prompt,
         application_id: selectedNode.application_id,
       },
+      application: {
+        id: selectedApplication?.id,
+        name: selectedApplication?.name,
+      },
       connected_at: new Date().toISOString(),
       working_directory: workingDirectory,
       git_repo_url: gitRepoUrl,
       git_branch: gitBranch,
     });
 
-    console.log('\n┌─────────────────────────────────────────────────────────────┐');
-    console.log('│                    Connected to GBOS                        │');
-    console.log('├─────────────────────────────────────────────────────────────┤');
-    console.log(`│  Node:          ${node.name.padEnd(42)}│`);
-    console.log(`│  Connection ID: ${connection_id.substring(0, 36).padEnd(42)}│`);
-    console.log(`│  Working Dir:   ${workingDirectory.substring(0, 42).padEnd(42)}│`);
-    console.log('└─────────────────────────────────────────────────────────────┘');
-
-    console.log('\n✓ Successfully connected!\n');
-
-    // Show session info for other tools
-    console.log('Session data stored at: ~/.gbos/session.json');
-    console.log('\nEnvironment variables available:');
-    const envVars = config.getSessionEnv();
-    Object.entries(envVars).forEach(([key, value]) => {
-      if (value) {
-        console.log(`  ${key}=${value}`);
-      }
+    // Display success with logo and summary
+    displayConnectSuccess({
+      accountName: accountName,
+      accountId: session.account_id,
+      applicationName: selectedApplication?.name || 'N/A',
+      nodeName: node.name,
+      nodeId: node.id,
+      connectionId: connection_id,
+      userId: session.user_id,
     });
-
-    console.log('\nOther CLI tools can access this session by reading ~/.gbos/session.json');
-    console.log('or by using the GBOS MCP server.\n');
 
   } catch (error) {
     if (error.code === 'NODE_BUSY') {
-      console.error(`\nNode is already connected to another CLI session.\n`);
+      displayMessageBox(
+        'Node Busy',
+        'This node is already connected to another CLI session.',
+        'error'
+      );
     } else {
-      console.error(`\nConnection failed: ${error.message}\n`);
+      displayMessageBox('Connection Failed', error.message, 'error');
     }
     if (process.env.DEBUG) {
       console.error(error);
