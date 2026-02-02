@@ -464,6 +464,18 @@ function printBanner() {
   console.log(`${DIM}${' '.repeat(padding)}   Generative Business Operating System${RESET}\n`);
 }
 
+// Color definitions for status table
+const TABLE_COLORS = {
+  white: '\x1b[37m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  blue: '\x1b[34m',
+  cyan: '\x1b[36m',
+  yellow: '\x1b[33m',
+  gray: '\x1b[90m',
+  magenta: '\x1b[35m',
+};
+
 // Print status table with two columns
 function printStatusTable(leftColumn, rightColumn) {
   const termWidth = getTerminalWidth();
@@ -471,18 +483,32 @@ function printStatusTable(leftColumn, rightColumn) {
   const colWidth = Math.floor((tableWidth - 3) / 2); // -3 for borders and divider
   const borderColor = fg(...LOGO_NAVY);
   const labelColor = DIM;
-  const valueColor = fg(...LOGO_LIGHT);
+
+  // Helper to get value color based on field and value
+  const getValueColor = (label, value) => {
+    const lowerLabel = (label || '').toLowerCase();
+    const hasValue = value && value !== 'N/A' && value !== 'Unknown';
+
+    if (lowerLabel.includes('status')) {
+      if (value && value.includes('Connected')) return TABLE_COLORS.green;
+      if (value && value.includes('Authenticated')) return TABLE_COLORS.blue;
+      return TABLE_COLORS.red;
+    }
+    if (lowerLabel.includes('application') || lowerLabel.includes('node')) {
+      return hasValue ? TABLE_COLORS.white : TABLE_COLORS.red;
+    }
+    return TABLE_COLORS.white;
+  };
 
   // Helper to format a row
   const formatCell = (label, value, width) => {
-    const content = `${labelColor}${label}:${RESET} ${valueColor}${value || 'N/A'}${RESET}`;
-    const visibleLen = `${label}: ${value || 'N/A'}`.length;
+    const displayValue = value || 'N/A';
+    const valueColor = getValueColor(label, displayValue);
+    const content = `${labelColor}${label}:${RESET} ${valueColor}${displayValue}${RESET}`;
+    const visibleLen = `${label}: ${displayValue}`.length;
     const padding = Math.max(0, width - visibleLen);
     return content + ' '.repeat(padding);
   };
-
-  // Helper to strip ANSI codes for length calculation
-  const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*m/g, '');
 
   console.log(`${borderColor}┌${'─'.repeat(colWidth)}┬${'─'.repeat(colWidth)}┐${RESET}`);
 
@@ -504,24 +530,17 @@ function printStatusTable(leftColumn, rightColumn) {
 function displayStatus(data) {
   printBanner();
 
-  const version = require('../../package.json').version;
-
   const leftColumn = [
-    { label: 'Version', value: `v${version}` },
-    { label: 'User', value: data.userName || 'Not authenticated' },
     { label: 'Account', value: data.accountName || 'N/A' },
+    { label: 'User', value: data.userName || 'Not authenticated' },
+    { label: 'Session', value: data.connectionId ? data.connectionId.substring(0, 12) + '...' : 'N/A' },
   ];
 
   const rightColumn = [
-    { label: 'Status', value: data.isConnected ? '● Connected' : '○ Disconnected' },
+    { label: 'Status', value: data.isConnected ? '● Connected' : (data.userName ? '● Authenticated' : '○ Not authenticated') },
     { label: 'Application', value: data.applicationName || 'N/A' },
     { label: 'Node', value: data.nodeName || 'N/A' },
   ];
-
-  if (data.connectionId) {
-    leftColumn.push({ label: 'Session', value: data.connectionId.substring(0, 8) + '...' });
-    rightColumn.push({ label: 'Connected', value: data.connectedAt || 'N/A' });
-  }
 
   printStatusTable(leftColumn, rightColumn);
   console.log('');
@@ -531,44 +550,66 @@ function displayStatus(data) {
 function displayConnectBanner(data) {
   printBanner();
 
-  const version = require('../../package.json').version;
-
   const leftColumn = [
     { label: 'Account', value: data.accountName || 'N/A' },
-    { label: 'Application', value: data.applicationName || 'N/A' },
+    { label: 'User', value: data.userName || 'N/A' },
+    { label: 'Session', value: data.sessionId ? data.sessionId.substring(0, 12) + '...' : 'N/A' },
   ];
 
   const rightColumn = [
-    { label: 'Node', value: data.nodeName || 'N/A' },
     { label: 'Status', value: '● Connected' },
+    { label: 'Application', value: data.applicationName || 'N/A' },
+    { label: 'Node', value: data.nodeName || 'N/A' },
   ];
 
   printStatusTable(leftColumn, rightColumn);
 
-  console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Connected!${RESET}`);
-  console.log(`  ${DIM}Run your favorite coding agent in this CLI to start working.${RESET}\n`);
+  // Instructions with highlighted keywords
+  const cmd = TABLE_COLORS.cyan;
+  const highlight = TABLE_COLORS.yellow;
+  const dim = DIM;
+
+  console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Connected!${RESET}\n`);
+  console.log(`  Run your favorite ${highlight}coding agent${RESET} in this CLI to start working.`);
+  console.log(`  Use ${cmd}/gbos${RESET} to list commands or simply ask your agent to run these commands.\n`);
+
+  console.log(`  ${dim}Available commands:${RESET}`);
+  console.log(`    ${cmd}auth${RESET} ${dim}[options]${RESET}      Authenticate with GBOS services`);
+  console.log(`    ${cmd}connect${RESET} ${dim}[options]${RESET}   Connect to a GBOS development node`);
+  console.log(`    ${cmd}disconnect${RESET}          Disconnect from the current GBOS node`);
+  console.log(`    ${cmd}status${RESET}              Show current authentication and connection status`);
+  console.log(`    ${cmd}tasks${RESET}               Show tasks assigned to this development node`);
+  console.log(`    ${cmd}next${RESET}                Get the next task in the queue`);
+  console.log(`    ${cmd}continue${RESET}            Continue working on current/next task`);
+  console.log(`    ${cmd}fallback${RESET}            Cancel current task and revert to last completed state`);
+  console.log(`    ${cmd}auto${RESET}                Automatically work through all tasks and poll for new ones`);
+  console.log(`    ${cmd}logout${RESET} ${dim}[options]${RESET}    Log out from GBOS services and clear credentials`);
+  console.log(`    ${cmd}help${RESET} ${dim}[command]${RESET}      Display help for a specific command\n`);
+
+  console.log(`  ${dim}Supported Agents:${RESET} ${highlight}Claude${RESET}, ${highlight}Codex${RESET}, ${highlight}Gemini${RESET}, ${highlight}Cursor IDE${RESET}, ${highlight}AntiGravity IDE${RESET}, ${highlight}VS Code IDE${RESET}\n`);
 }
 
 // Display auth success with banner
 function displayAuthBanner(data) {
   printBanner();
 
-  const version = require('../../package.json').version;
-
   const leftColumn = [
-    { label: 'User', value: data.userName || 'N/A' },
     { label: 'Account', value: data.accountName || 'N/A' },
+    { label: 'User', value: data.userName || 'N/A' },
+    { label: 'Session', value: data.sessionId ? data.sessionId.substring(0, 12) + '...' : 'N/A' },
   ];
 
   const rightColumn = [
     { label: 'Status', value: '● Authenticated' },
-    { label: 'Session', value: data.sessionId ? data.sessionId.substring(0, 8) + '...' : 'N/A' },
+    { label: 'Application', value: 'N/A' },
+    { label: 'Node', value: 'N/A' },
   ];
 
   printStatusTable(leftColumn, rightColumn);
 
+  const cmd = TABLE_COLORS.cyan;
   console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Authenticated!${RESET}`);
-  console.log(`  ${DIM}Run "gbos connect" to connect to a development node.${RESET}\n`);
+  console.log(`  ${DIM}Run${RESET} ${cmd}gbos connect${RESET} ${DIM}to connect to a development node.${RESET}\n`);
 }
 
 module.exports = {
