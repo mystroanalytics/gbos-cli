@@ -6,6 +6,7 @@ const program = new Command();
 const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
+const logoCommand = require('./commands/logo');
 const config = require('./lib/config');
 
 const VERSION = require('../package.json').version;
@@ -116,6 +117,11 @@ program
   .description('Log out from GBOS services and clear credentials')
   .option('-a, --all', 'Clear all stored data including machine ID')
   .action(logoutCommand);
+
+program
+  .command('logo')
+  .description('Print the GBOS logo image')
+  .action(logoCommand);
 
 program
   .command('help [command]')
