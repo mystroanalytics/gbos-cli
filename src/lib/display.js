@@ -57,15 +57,18 @@ function samplePixel(png, x, y) {
 }
 
 // Check if pixel is transparent or white (background)
-function isBackground(pixel) {
-  return pixel.a < 50 || (pixel.r > 240 && pixel.g > 240 && pixel.b > 240);
+function isBackground(pixel, options = {}) {
+  const alphaThreshold = options.alphaThreshold ?? 50;
+  const backgroundLuminance = options.backgroundLuminance ?? 240;
+  return pixel.a < alphaThreshold ||
+    (pixel.r > backgroundLuminance && pixel.g > backgroundLuminance && pixel.b > backgroundLuminance);
 }
 
 // Shading characters for smooth edges (from light to full)
 const SHADE_CHARS = [' ', '░', '▒', '▓', '█'];
 
 // Get average alpha/coverage for a region (for anti-aliasing)
-function getRegionCoverage(png, startX, startY, width, height) {
+function getRegionCoverage(png, startX, startY, width, height, backgroundOptions = {}) {
   let totalAlpha = 0;
   let totalR = 0, totalG = 0, totalB = 0;
   let samples = 0;
@@ -73,7 +76,7 @@ function getRegionCoverage(png, startX, startY, width, height) {
   for (let y = startY; y < startY + height; y++) {
     for (let x = startX; x < startX + width; x++) {
       const pixel = samplePixel(png, x, y);
-      if (!isBackground(pixel)) {
+      if (!isBackground(pixel, backgroundOptions)) {
         totalAlpha += pixel.a;
         totalR += pixel.r;
         totalG += pixel.g;
@@ -94,30 +97,111 @@ function getRegionCoverage(png, startX, startY, width, height) {
   };
 }
 
-// Convert PNG to true-color pixel art with smooth edges
-// Uses shading characters for anti-aliasing on edges
-function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5) {
+function cropPng(png, alphaThreshold = 1) {
+  let minX = png.width;
+  let minY = png.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      const idx = (png.width * y + x) << 2;
+      if (png.data[idx + 3] >= alphaThreshold) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return png;
+
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  const cropped = new PNG({ width, height });
+
+  for (let y = 0; y < height; y++) {
+    const srcStart = ((minY + y) * png.width + minX) << 2;
+    const srcEnd = srcStart + (width << 2);
+    const destStart = (width * y) << 2;
+    png.data.copy(cropped.data, destStart, srcStart, srcEnd);
+  }
+
+  return cropped;
+}
+
+// Convert PNG to true-color pixel art
+// Uses shading characters for anti-aliasing on edges when sampling coverage
+function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5, options = {}) {
+  const {
+    alphaThreshold = 50,
+    backgroundLuminance = 240,
+    sampleMode = 'coverage',
+    crop = false,
+    cropAlphaThreshold = 1,
+  } = options;
+
   try {
     const data = fs.readFileSync(imagePath);
-    const png = PNG.sync.read(data);
+    let png = PNG.sync.read(data);
+    if (crop) {
+      png = cropPng(png, cropAlphaThreshold);
+    }
+
+    const resolvedWidth = Math.max(1, Math.round(targetWidth));
+    const resolvedHeight = targetHeight == null
+      ? Math.max(1, Math.round((resolvedWidth * png.height) / (png.width * 2)))
+      : Math.max(1, Math.round(targetHeight));
 
     // Each row of output = 2 rows of pixels (using half-blocks)
-    const pixelRows = targetHeight * 2;
-    const cellWidth = png.width / targetWidth;
+    const pixelRows = resolvedHeight * 2;
+    const cellWidth = png.width / resolvedWidth;
     const cellHeight = png.height / pixelRows;
+    const backgroundOptions = { alphaThreshold, backgroundLuminance };
 
     const lines = [];
 
-    for (let row = 0; row < targetHeight; row++) {
+    for (let row = 0; row < resolvedHeight; row++) {
       let line = '';
-      for (let col = 0; col < targetWidth; col++) {
+      for (let col = 0; col < resolvedWidth; col++) {
+        if (sampleMode === 'nearest') {
+          const topStartY = row * 2 * cellHeight;
+          const bottomStartY = (row * 2 + 1) * cellHeight;
+          const startX = col * cellWidth;
+
+          const topPixel = samplePixel(png, startX + cellWidth * 0.5, topStartY + cellHeight * 0.5);
+          const bottomPixel = samplePixel(png, startX + cellWidth * 0.5, bottomStartY + cellHeight * 0.5);
+          const topBg = isBackground(topPixel, backgroundOptions);
+          const bottomBg = isBackground(bottomPixel, backgroundOptions);
+
+          if (topBg && bottomBg) {
+            line += ' ';
+            continue;
+          }
+
+          if (!topBg && !bottomBg) {
+            line += fg(topPixel.r, topPixel.g, topPixel.b) +
+              bg(bottomPixel.r, bottomPixel.g, bottomPixel.b) +
+              UPPER_HALF + RESET;
+            continue;
+          }
+
+          if (!topBg) {
+            line += fg(topPixel.r, topPixel.g, topPixel.b) + UPPER_HALF + RESET;
+          } else {
+            line += fg(bottomPixel.r, bottomPixel.g, bottomPixel.b) + LOWER_HALF + RESET;
+          }
+          continue;
+        }
+
         // Get coverage for top and bottom halves of this cell
         const topStartY = row * 2 * cellHeight;
         const bottomStartY = (row * 2 + 1) * cellHeight;
         const startX = col * cellWidth;
 
-        const topRegion = getRegionCoverage(png, startX, topStartY, cellWidth, cellHeight);
-        const bottomRegion = getRegionCoverage(png, startX, bottomStartY, cellWidth, cellHeight);
+        const topRegion = getRegionCoverage(png, startX, topStartY, cellWidth, cellHeight, backgroundOptions);
+        const bottomRegion = getRegionCoverage(png, startX, bottomStartY, cellWidth, cellHeight, backgroundOptions);
 
         const topCov = topRegion.coverage;
         const bottomCov = bottomRegion.coverage;
@@ -177,30 +261,90 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5) {
   }
 }
 
+function applyAlphaThreshold(png, alphaThreshold) {
+  if (!alphaThreshold) return png;
+  for (let i = 0; i < png.data.length; i += 4) {
+    if (png.data[i + 3] < alphaThreshold) {
+      png.data[i + 3] = 0;
+    }
+  }
+  return png;
+}
+
+function preparePngForRender(imagePath, options = {}) {
+  const { alphaThreshold, crop, cropAlphaThreshold } = options;
+  const data = fs.readFileSync(imagePath);
+  let png = PNG.sync.read(data);
+  if (alphaThreshold) {
+    png = applyAlphaThreshold(png, alphaThreshold);
+  }
+  if (crop) {
+    png = cropPng(png, cropAlphaThreshold ?? alphaThreshold ?? 1);
+  }
+  return PNG.sync.write(png);
+}
+
 async function displayImage(imagePath, options = {}) {
-  const fallbackWidth = options.fallbackWidth || 40;
-  const fallbackHeight = options.fallbackHeight || 12;
+  const fallbackWidth = options.fallbackWidth === undefined ? 40 : options.fallbackWidth;
+  const fallbackHeight = options.fallbackHeight === undefined ? 12 : options.fallbackHeight;
+  const sharp = options.sharp ?? false;
+  const alphaThreshold = options.alphaThreshold ?? 50;
+  const crop = options.crop ?? false;
+  const cropAlphaThreshold = options.cropAlphaThreshold;
+  const backgroundLuminance = options.backgroundLuminance ?? 240;
+  const useProcessedBuffer = crop || sharp;
   const renderOptions = { ...options };
   delete renderOptions.fallbackWidth;
   delete renderOptions.fallbackHeight;
+  delete renderOptions.sharp;
+  delete renderOptions.alphaThreshold;
+  delete renderOptions.crop;
+  delete renderOptions.cropAlphaThreshold;
+  delete renderOptions.backgroundLuminance;
 
   try {
-    const terminalImage = await import('terminal-image');
-    const renderer = terminalImage.default || terminalImage;
-    const output = await renderer.file(imagePath, renderOptions);
-    process.stdout.write(output);
-    if (!output.endsWith('\n')) process.stdout.write('\n');
-    return true;
-  } catch (error) {
-    const fallbackLines = imageToPixels(imagePath, fallbackWidth, fallbackHeight);
-    if (!fallbackLines) {
-      throw error;
+    let supportsGraphics = false;
+    try {
+      const supportsTerminalGraphics = await import('supports-terminal-graphics');
+      const graphics = supportsTerminalGraphics.default || supportsTerminalGraphics;
+      supportsGraphics = Boolean(
+        graphics?.stdout?.kitty || graphics?.stdout?.iterm2 || graphics?.stdout?.sixel,
+      );
+    } catch {
+      supportsGraphics = false;
     }
-    console.log('');
-    fallbackLines.forEach((line) => console.log(line));
-    console.log('');
-    return false;
+
+    if (supportsGraphics) {
+      const terminalImage = await import('terminal-image');
+      const renderer = terminalImage.default || terminalImage;
+      const buffer = useProcessedBuffer
+        ? preparePngForRender(imagePath, { alphaThreshold, crop, cropAlphaThreshold })
+        : null;
+      const output = buffer
+        ? await renderer.buffer(buffer, renderOptions)
+        : await renderer.file(imagePath, renderOptions);
+      process.stdout.write(output);
+      if (!output.endsWith('\n')) process.stdout.write('\n');
+      return true;
+    }
+  } catch (error) {
+    // Fall through to ANSI fallback
   }
+
+  const fallbackLines = imageToPixels(imagePath, fallbackWidth, fallbackHeight, {
+    sampleMode: sharp ? 'nearest' : 'coverage',
+    alphaThreshold,
+    backgroundLuminance,
+    crop,
+    cropAlphaThreshold: cropAlphaThreshold ?? alphaThreshold,
+  });
+  if (!fallbackLines) {
+    throw new Error('Unable to render image.');
+  }
+  console.log('');
+  fallbackLines.forEach((line) => console.log(line));
+  console.log('');
+  return false;
 }
 
 
