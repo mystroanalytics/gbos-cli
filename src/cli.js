@@ -76,12 +76,15 @@ program
       return;
     }
 
+    const userName = session.user_name || session.user_email || `User ${session.user_id}`;
+    const accountName = session.account_name || `Account ${session.account_id}`;
+
     console.log('\n┌─────────────────────────────────────────────────────────────┐');
     console.log('│                      GBOS Status                            │');
     console.log('├─────────────────────────────────────────────────────────────┤');
     console.log(`│  Authenticated: ✓                                          │`);
-    console.log(`│  User ID:       ${String(session.user_id).padEnd(42)}│`);
-    console.log(`│  Account ID:    ${String(session.account_id).padEnd(42)}│`);
+    console.log(`│  User:          ${userName.substring(0, 42).padEnd(42)}│`);
+    console.log(`│  Account:       ${accountName.substring(0, 42).padEnd(42)}│`);
 
     const connection = session.connection;
     if (connection) {

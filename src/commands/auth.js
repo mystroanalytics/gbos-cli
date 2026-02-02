@@ -34,9 +34,11 @@ async function authCommand(options) {
   // Check if already authenticated
   if (config.isAuthenticated() && !options.force) {
     const session = config.loadSession();
+    const userName = session.user_name || session.user_email || `User ${session.user_id}`;
+    const accountName = session.account_name || `Account ${session.account_id}`;
     displayMessageBox(
       'Already Authenticated',
-      `User ID: ${session.user_id}, Account ID: ${session.account_id}. Use --force to re-authenticate or "gbos logout" first.`,
+      `${userName} · ${accountName}. Use --force to re-authenticate or "gbos logout" first.`,
       'info'
     );
     return;
