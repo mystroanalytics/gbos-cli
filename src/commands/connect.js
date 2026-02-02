@@ -1,7 +1,8 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
 const { checkForUpdates } = require('../lib/version');
-const { displayConnectSuccess, displayMessageBox, colors } = require('../lib/display');
+const { displayConnectBanner, displayMessageBox, colors } = require('../lib/display');
+const { setupProjectSkills } = require('../lib/skills');
 const readline = require('readline');
 const { execSync } = require('child_process');
 
@@ -158,6 +159,9 @@ async function connectCommand(options) {
     try {
       // Try the applications endpoint first
       const appsResponse = await api.listApplications();
+      if (process.env.DEBUG) {
+        console.log('Applications API response:', JSON.stringify(appsResponse, null, 2));
+      }
       const applications = appsResponse.data || [];
 
       if (applications.length > 0) {
@@ -169,10 +173,14 @@ async function connectCommand(options) {
           application: app,
         }));
       }
+      if (process.env.DEBUG) {
+        console.log(`Found ${applications.length} applications from /cli/applications`);
+      }
     } catch (err) {
       // Applications endpoint not available, fall back to deriving from nodes
       if (process.env.DEBUG) {
-        console.log('Note: /cli/applications endpoint not available, falling back to nodes');
+        console.log('Note: /cli/applications endpoint error:', err.message);
+        console.log('Falling back to nodes endpoint');
       }
     }
 
@@ -349,12 +357,21 @@ async function connectCommand(options) {
       git_branch: gitBranch,
     });
 
-    // Display success with logo and summary
-    displayConnectSuccess({
+    // Generate skill files for coding tools
+    const skillsResults = setupProjectSkills(workingDirectory);
+    if (process.env.DEBUG) {
+      console.log('Skills setup results:', JSON.stringify(skillsResults, null, 2));
+    }
+
+    // Display success with banner
+    displayConnectBanner({
       accountName: accountName,
       applicationName: applicationName,
       nodeName: node.name,
     });
+
+    // Exit after successful connection
+    process.exit(0);
 
   } catch (error) {
     if (error.code === 'NODE_BUSY') {

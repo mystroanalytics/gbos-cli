@@ -1,0 +1,94 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "GBOS: Status",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["status"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: List Tasks",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["tasks"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: Next Task",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["next_task"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: Continue (Get Task Prompt)",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["continue"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: Fallback (Cancel Task)",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["fallback"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: Auto Mode",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["auto"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: Connect",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["connect"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "GBOS: Disconnect",
+      "type": "shell",
+      "command": "gbos",
+      "args": ["disconnect"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

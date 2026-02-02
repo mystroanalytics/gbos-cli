@@ -1,7 +1,8 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
 const { checkForUpdates } = require('../lib/version');
-const { displayAuthSuccess, displayMessageBox } = require('../lib/display');
+const { displayAuthBanner, displayMessageBox, printBanner } = require('../lib/display');
+const { registerMCPServer } = require('../lib/skills');
 
 // Sleep helper
 function sleep(ms) {
@@ -123,8 +124,14 @@ async function authCommand(options) {
             authenticated_at: new Date().toISOString(),
           });
 
-          // Display success with logo - use names
-          displayAuthSuccess({
+          // Register MCP server
+          const mcpResults = registerMCPServer();
+          if (process.env.DEBUG) {
+            console.log('MCP server registration:', mcpResults);
+          }
+
+          // Display success with banner
+          displayAuthBanner({
             userName: displayUserName,
             accountName: account_name || `Account ${account_id}`,
             sessionId: session_id,

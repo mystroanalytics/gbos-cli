@@ -12,7 +12,11 @@ const DIM = `${ESC}[2m`;
 const fg = (r, g, b) => `${ESC}[38;2;${r};${g};${b}m`;
 const bg = (r, g, b) => `${ESC}[48;2;${r};${g};${b}m`;
 
-// Purple theme RGB values
+// GBOS brand colors from logo
+const LOGO_NAVY = [36, 31, 102];     // Primary Deep Indigo
+const LOGO_LIGHT = [85, 110, 255];   // Lighter blue for gradient
+
+// Purple theme RGB values (legacy)
 const PURPLE = {
   dark: [75, 0, 130],      // Deep purple
   medium: [128, 0, 128],   // Purple
@@ -20,6 +24,16 @@ const PURPLE = {
   bright: [186, 85, 211],  // Medium orchid
   pale: [216, 191, 216],   // Thistle
 };
+
+// GBOS.IO ASCII Banner
+const GBOS_BANNER = [
+  " ██████╗ ██████╗  ██████╗ ███████╗    ██╗ ██████╗ ",
+  "██╔════╝ ██╔══██╗██╔═══██╗██╔════╝    ██║██╔═══██╗",
+  "██║  ███╗██████╔╝██║   ██║███████╗    ██║██║   ██║",
+  "██║   ██║██╔══██╗██║   ██║╚════██║    ██║██║   ██║",
+  "╚██████╔╝██████╔╝╚██████╔╝███████║    ██║╚██████╔╝",
+  " ╚═════╝ ╚═════╝  ╚═════╝ ╚══════╝    ╚═╝ ╚═════╝ "
+];
 
 // 256-color fallback codes
 const colors = {
@@ -423,6 +437,140 @@ function displayMessageBox(title, message, type = 'info') {
   console.log(`${color}└${'─'.repeat(width)}┘${RESET}\n`);
 }
 
+// Print GBOS banner with gradient
+function printBanner() {
+  const termWidth = getTerminalWidth();
+  const bannerWidth = GBOS_BANNER[0].length;
+  const padding = Math.max(0, Math.floor((termWidth - bannerWidth) / 2));
+  const padStr = ' '.repeat(padding);
+
+  console.log('');
+  GBOS_BANNER.forEach((line) => {
+    let coloredLine = '';
+    for (let i = 0; i < line.length; i++) {
+      const ratio = i / line.length;
+      const r = Math.floor(LOGO_NAVY[0] + (LOGO_LIGHT[0] - LOGO_NAVY[0]) * ratio);
+      const g = Math.floor(LOGO_NAVY[1] + (LOGO_LIGHT[1] - LOGO_NAVY[1]) * ratio);
+      const b = Math.floor(LOGO_NAVY[2] + (LOGO_LIGHT[2] - LOGO_NAVY[2]) * ratio);
+
+      if (line[i] === ' ') {
+        coloredLine += ' ';
+      } else {
+        coloredLine += `${fg(r, g, b)}${line[i]}`;
+      }
+    }
+    console.log(`${padStr}${coloredLine}${RESET}`);
+  });
+  console.log(`${DIM}${' '.repeat(padding)}   Generative Business Operating System${RESET}\n`);
+}
+
+// Print status table with two columns
+function printStatusTable(leftColumn, rightColumn) {
+  const termWidth = getTerminalWidth();
+  const tableWidth = Math.min(80, termWidth - 4);
+  const colWidth = Math.floor((tableWidth - 3) / 2); // -3 for borders and divider
+  const borderColor = fg(...LOGO_NAVY);
+  const labelColor = DIM;
+  const valueColor = fg(...LOGO_LIGHT);
+
+  // Helper to format a row
+  const formatCell = (label, value, width) => {
+    const content = `${labelColor}${label}:${RESET} ${valueColor}${value || 'N/A'}${RESET}`;
+    const visibleLen = `${label}: ${value || 'N/A'}`.length;
+    const padding = Math.max(0, width - visibleLen);
+    return content + ' '.repeat(padding);
+  };
+
+  // Helper to strip ANSI codes for length calculation
+  const stripAnsi = (str) => str.replace(/\x1b\[[0-9;]*m/g, '');
+
+  console.log(`${borderColor}┌${'─'.repeat(colWidth)}┬${'─'.repeat(colWidth)}┐${RESET}`);
+
+  const maxRows = Math.max(leftColumn.length, rightColumn.length);
+  for (let i = 0; i < maxRows; i++) {
+    const left = leftColumn[i] || { label: '', value: '' };
+    const right = rightColumn[i] || { label: '', value: '' };
+
+    const leftCell = left.label ? formatCell(left.label, left.value, colWidth - 2) : ' '.repeat(colWidth - 2);
+    const rightCell = right.label ? formatCell(right.label, right.value, colWidth - 2) : ' '.repeat(colWidth - 2);
+
+    console.log(`${borderColor}│${RESET} ${leftCell}${borderColor}│${RESET} ${rightCell}${borderColor}│${RESET}`);
+  }
+
+  console.log(`${borderColor}└${'─'.repeat(colWidth)}┴${'─'.repeat(colWidth)}┘${RESET}`);
+}
+
+// Display full status screen with banner and table
+function displayStatus(data) {
+  printBanner();
+
+  const version = require('../../package.json').version;
+
+  const leftColumn = [
+    { label: 'Version', value: `v${version}` },
+    { label: 'User', value: data.userName || 'Not authenticated' },
+    { label: 'Account', value: data.accountName || 'N/A' },
+  ];
+
+  const rightColumn = [
+    { label: 'Status', value: data.isConnected ? '● Connected' : '○ Disconnected' },
+    { label: 'Application', value: data.applicationName || 'N/A' },
+    { label: 'Node', value: data.nodeName || 'N/A' },
+  ];
+
+  if (data.connectionId) {
+    leftColumn.push({ label: 'Session', value: data.connectionId.substring(0, 8) + '...' });
+    rightColumn.push({ label: 'Connected', value: data.connectedAt || 'N/A' });
+  }
+
+  printStatusTable(leftColumn, rightColumn);
+  console.log('');
+}
+
+// Display connect success with banner
+function displayConnectBanner(data) {
+  printBanner();
+
+  const version = require('../../package.json').version;
+
+  const leftColumn = [
+    { label: 'Account', value: data.accountName || 'N/A' },
+    { label: 'Application', value: data.applicationName || 'N/A' },
+  ];
+
+  const rightColumn = [
+    { label: 'Node', value: data.nodeName || 'N/A' },
+    { label: 'Status', value: '● Connected' },
+  ];
+
+  printStatusTable(leftColumn, rightColumn);
+
+  console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Connected!${RESET}`);
+  console.log(`  ${DIM}Run your favorite coding agent in this CLI to start working.${RESET}\n`);
+}
+
+// Display auth success with banner
+function displayAuthBanner(data) {
+  printBanner();
+
+  const version = require('../../package.json').version;
+
+  const leftColumn = [
+    { label: 'User', value: data.userName || 'N/A' },
+    { label: 'Account', value: data.accountName || 'N/A' },
+  ];
+
+  const rightColumn = [
+    { label: 'Status', value: '● Authenticated' },
+    { label: 'Session', value: data.sessionId ? data.sessionId.substring(0, 8) + '...' : 'N/A' },
+  ];
+
+  printStatusTable(leftColumn, rightColumn);
+
+  console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Authenticated!${RESET}`);
+  console.log(`  ${DIM}Run "gbos connect" to connect to a development node.${RESET}\n`);
+}
+
 module.exports = {
   colors,
   displayLogo,
@@ -434,4 +582,16 @@ module.exports = {
   displayImage,
   imageToPixels,
   getTerminalWidth,
+  printBanner,
+  printStatusTable,
+  displayStatus,
+  displayConnectBanner,
+  displayAuthBanner,
+  fg,
+  bg,
+  LOGO_NAVY,
+  LOGO_LIGHT,
+  RESET,
+  BOLD,
+  DIM,
 };

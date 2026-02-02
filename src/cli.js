@@ -7,7 +7,9 @@ const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
 const logoCommand = require('./commands/logo');
+const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, autoCommand } = require('./commands/tasks');
 const config = require('./lib/config');
+const { displayStatus, printBanner } = require('./lib/display');
 
 const VERSION = require('../package.json').version;
 
@@ -72,47 +74,55 @@ program
     const session = config.loadSession();
 
     if (!session || !session.access_token) {
-      console.log('\nStatus: Not authenticated');
-      console.log('Run "gbos auth" to authenticate.\n');
+      printBanner();
+      console.log('  Status: Not authenticated');
+      console.log('  Run "gbos auth" to authenticate.\n');
       return;
     }
 
     const userName = session.user_first_name && session.user_last_name
       ? `${session.user_first_name} ${session.user_last_name}`
-      : session.user_name || `User ${session.user_id}`;
-    const accountName = session.account_name || `Account ${session.account_id}`;
-
-    console.log('\n┌─────────────────────────────────────────────────────────────┐');
-    console.log('│                      GBOS Status                            │');
-    console.log('├─────────────────────────────────────────────────────────────┤');
-    console.log(`│  Authenticated: ✓                                          │`);
-    console.log(`│  User:          ${userName.substring(0, 42).padEnd(42)}│`);
-    console.log(`│  Account:       ${accountName.substring(0, 42).padEnd(42)}│`);
+      : session.user_name || 'Unknown';
+    const accountName = session.account_name || 'Unknown';
 
     const connection = session.connection;
-    if (connection) {
-      console.log('├─────────────────────────────────────────────────────────────┤');
-      console.log(`│  Connected:     ✓                                          │`);
-      console.log(`│  Node:          ${(connection.node?.name || 'Unknown').substring(0, 42).padEnd(42)}│`);
-      console.log(`│  Node ID:       ${String(connection.node?.id || '').padEnd(42)}│`);
-      console.log(`│  Connection:    ${(connection.connection_id || '').substring(0, 36).padEnd(42)}│`);
-    } else {
-      console.log('├─────────────────────────────────────────────────────────────┤');
-      console.log(`│  Connected:     ✗ (run "gbos connect")                     │`);
-    }
 
-    console.log('└─────────────────────────────────────────────────────────────┘\n');
-
-    // Show environment variables
-    console.log('Environment variables:');
-    const envVars = config.getSessionEnv();
-    Object.entries(envVars).forEach(([key, value]) => {
-      if (value) {
-        console.log(`  export ${key}="${value}"`);
-      }
+    displayStatus({
+      userName,
+      accountName,
+      isConnected: !!connection,
+      applicationName: connection?.application?.name,
+      nodeName: connection?.node?.name,
+      connectionId: connection?.connection_id,
+      connectedAt: connection?.connected_at ? new Date(connection.connected_at).toLocaleString() : null,
     });
-    console.log('');
   });
+
+program
+  .command('tasks')
+  .description('Show tasks assigned to this development node')
+  .action(tasksCommand);
+
+program
+  .command('next_task')
+  .alias('next')
+  .description('Get the next task in the queue')
+  .action(nextTaskCommand);
+
+program
+  .command('continue')
+  .description('Continue working on the current or next task (outputs prompt for coding agent)')
+  .action(continueCommand);
+
+program
+  .command('fallback')
+  .description('Cancel work from the current task and revert to last completed state')
+  .action(fallbackCommand);
+
+program
+  .command('auto')
+  .description('Automatically work through all tasks and poll for new ones')
+  .action(autoCommand);
 
 program
   .command('logout')
@@ -122,8 +132,10 @@ program
 
 program
   .command('logo')
-  .description('Print the GBOS logo image')
-  .action(logoCommand);
+  .description('Print the GBOS logo banner')
+  .action(() => {
+    printBanner();
+  });
 
 program
   .command('help [command]')
@@ -135,7 +147,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, logout, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next_task, continue, fallback, auto, logout, help');
       }
     } else {
       program.outputHelp();
