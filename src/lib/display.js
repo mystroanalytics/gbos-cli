@@ -61,9 +61,42 @@ function isBackground(pixel) {
   return pixel.a < 50 || (pixel.r > 240 && pixel.g > 240 && pixel.b > 240);
 }
 
-// Convert PNG to true-color pixel art using half-blocks
-// Each character cell represents 2 vertical pixels
-function imageToPixels(imagePath, targetWidth = 24, targetHeight = 12) {
+// Shading characters for smooth edges (from light to full)
+const SHADE_CHARS = [' ', '░', '▒', '▓', '█'];
+
+// Get average alpha/coverage for a region (for anti-aliasing)
+function getRegionCoverage(png, startX, startY, width, height) {
+  let totalAlpha = 0;
+  let totalR = 0, totalG = 0, totalB = 0;
+  let samples = 0;
+
+  for (let y = startY; y < startY + height; y++) {
+    for (let x = startX; x < startX + width; x++) {
+      const pixel = samplePixel(png, x, y);
+      if (!isBackground(pixel)) {
+        totalAlpha += pixel.a;
+        totalR += pixel.r;
+        totalG += pixel.g;
+        totalB += pixel.b;
+        samples++;
+      }
+    }
+  }
+
+  if (samples === 0) return { coverage: 0, r: 0, g: 0, b: 0 };
+
+  const totalPossible = width * height;
+  return {
+    coverage: samples / totalPossible,
+    r: Math.round(totalR / samples),
+    g: Math.round(totalG / samples),
+    b: Math.round(totalB / samples),
+  };
+}
+
+// Convert PNG to true-color pixel art with smooth edges
+// Uses shading characters for anti-aliasing on edges
+function imageToPixels(imagePath, targetWidth = 24, targetHeight = 5) {
   try {
     const data = fs.readFileSync(imagePath);
     const png = PNG.sync.read(data);
@@ -78,30 +111,62 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 12) {
     for (let row = 0; row < targetHeight; row++) {
       let line = '';
       for (let col = 0; col < targetWidth; col++) {
-        // Sample top and bottom pixels for this cell
-        const topY = row * 2 * cellHeight + cellHeight / 2;
-        const bottomY = (row * 2 + 1) * cellHeight + cellHeight / 2;
-        const x = col * cellWidth + cellWidth / 2;
+        // Get coverage for top and bottom halves of this cell
+        const topStartY = row * 2 * cellHeight;
+        const bottomStartY = (row * 2 + 1) * cellHeight;
+        const startX = col * cellWidth;
 
-        const topPixel = samplePixel(png, x, topY);
-        const bottomPixel = samplePixel(png, x, bottomY);
+        const topRegion = getRegionCoverage(png, startX, topStartY, cellWidth, cellHeight);
+        const bottomRegion = getRegionCoverage(png, startX, bottomStartY, cellWidth, cellHeight);
 
-        const topBg = isBackground(topPixel);
-        const bottomBg = isBackground(bottomPixel);
+        const topCov = topRegion.coverage;
+        const bottomCov = bottomRegion.coverage;
 
-        if (topBg && bottomBg) {
-          // Both transparent - just a space
+        // Both empty
+        if (topCov < 0.1 && bottomCov < 0.1) {
           line += ' ';
-        } else if (topBg && !bottomBg) {
-          // Only bottom has color - use lower half block with fg color
-          line += fg(bottomPixel.r, bottomPixel.g, bottomPixel.b) + LOWER_HALF + RESET;
-        } else if (!topBg && bottomBg) {
-          // Only top has color - use upper half block with fg color
-          line += fg(topPixel.r, topPixel.g, topPixel.b) + UPPER_HALF + RESET;
-        } else {
-          // Both have color - use upper half with fg=top, bg=bottom
-          line += fg(topPixel.r, topPixel.g, topPixel.b) + bg(bottomPixel.r, bottomPixel.g, bottomPixel.b) + UPPER_HALF + RESET;
+          continue;
         }
+
+        // Use dots for very light coverage (edges)
+        if (topCov < 0.3 && bottomCov < 0.3) {
+          const avgCov = (topCov + bottomCov) / 2;
+          const r = topCov > bottomCov ? topRegion.r : bottomRegion.r;
+          const g = topCov > bottomCov ? topRegion.g : bottomRegion.g;
+          const b = topCov > bottomCov ? topRegion.b : bottomRegion.b;
+          if (avgCov < 0.15) {
+            line += fg(r, g, b) + '·' + RESET;
+          } else {
+            line += fg(r, g, b) + '░' + RESET;
+          }
+          continue;
+        }
+
+        // Light top, solid bottom - use lower block with possible shading
+        if (topCov < 0.3 && bottomCov >= 0.3) {
+          if (topCov > 0.1) {
+            // Add dot above
+            line += fg(bottomRegion.r, bottomRegion.g, bottomRegion.b) + '▄' + RESET;
+          } else {
+            line += fg(bottomRegion.r, bottomRegion.g, bottomRegion.b) + LOWER_HALF + RESET;
+          }
+          continue;
+        }
+
+        // Solid top, light bottom
+        if (topCov >= 0.3 && bottomCov < 0.3) {
+          if (bottomCov > 0.1) {
+            line += fg(topRegion.r, topRegion.g, topRegion.b) + '▀' + RESET;
+          } else {
+            line += fg(topRegion.r, topRegion.g, topRegion.b) + UPPER_HALF + RESET;
+          }
+          continue;
+        }
+
+        // Both have significant coverage - use half block with colors
+        line += fg(topRegion.r, topRegion.g, topRegion.b) +
+                bg(bottomRegion.r, bottomRegion.g, bottomRegion.b) +
+                UPPER_HALF + RESET;
       }
       lines.push(line);
     }
@@ -112,116 +177,45 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 12) {
   }
 }
 
-// "gbos.io" pixel art (6 rows tall to match logo height - renders to 3 rows with half-blocks)
-function getGbosTextPixels() {
-  const p2 = PURPLE.medium;
-
-  // Compact 6-row pixel art for "gbos.io" (renders to 3 output rows)
-  const bitmap = [
-    ' 222  222  222  222     2  222 ',
-    '2    2  2 2  2 2       22 2  2 ',
-    '2 22 222  2  2  22   2  2 2  2 ',
-    '2  2 2  2 2  2    2  2  2 2  2 ',
-    ' 22  222   22  222    22   22  ',
-    '                               ',
-  ];
-
-  const lines = [];
-  const colorMap = { ' ': null, '2': p2 };
-
-  for (let row = 0; row < bitmap.length; row += 2) {
-    let line = '';
-    const topRow = bitmap[row] || '';
-    const bottomRow = bitmap[row + 1] || '';
-    const width = Math.max(topRow.length, bottomRow.length);
-
-    for (let col = 0; col < width; col++) {
-      const topChar = topRow[col] || ' ';
-      const bottomChar = bottomRow[col] || ' ';
-      const topColor = colorMap[topChar];
-      const bottomColor = colorMap[bottomChar];
-
-      if (!topColor && !bottomColor) {
-        line += ' ';
-      } else if (!topColor && bottomColor) {
-        line += fg(bottomColor[0], bottomColor[1], bottomColor[2]) + LOWER_HALF + RESET;
-      } else if (topColor && !bottomColor) {
-        line += fg(topColor[0], topColor[1], topColor[2]) + UPPER_HALF + RESET;
-      } else {
-        line += fg(topColor[0], topColor[1], topColor[2]) + bg(bottomColor[0], bottomColor[1], bottomColor[2]) + UPPER_HALF + RESET;
-      }
-    }
-    lines.push(line);
-  }
-
-  return lines;
-}
 
 // Fallback compact logo
 const COMPACT_LOGO = [
-  `${fg(...PURPLE.medium)}  ▄▀▀▀▄▄${RESET}`,
-  `${fg(...PURPLE.medium)}▄▀${fg(...PURPLE.bright)}●${fg(...PURPLE.medium)}    ▀▄${RESET}`,
-  `${fg(...PURPLE.light)}█        █${RESET}`,
-  `${fg(...PURPLE.light)} ▀▄    ▄▀${RESET}`,
-  `${fg(...PURPLE.bright)}   ▀▀▀▀${RESET}`,
+  `${fg(...PURPLE.medium)}  ▄▀▀▄${RESET}`,
+  `${fg(...PURPLE.medium)}▄▀${fg(...PURPLE.bright)}·${fg(...PURPLE.medium)} ▀▄${RESET}`,
+  `${fg(...PURPLE.light)} ▀▄▄▀${RESET}`,
 ];
-
-// Combine logo and text side by side
-function combineLogoAndText(logoLines, textLines) {
-  const combined = [];
-  const maxLines = Math.max(logoLines.length, textLines.length);
-  const logoStart = Math.floor((maxLines - logoLines.length) / 2);
-  const textStart = Math.floor((maxLines - textLines.length) / 2);
-
-  for (let i = 0; i < maxLines; i++) {
-    const logo = logoLines[i - logoStart] || '';
-    const text = textLines[i - textStart] || '';
-    combined.push(logo + '  ' + text);
-  }
-
-  return combined;
-}
 
 // Display logo with connection details (Claude Code style - clean, minimal)
 function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~24 chars wide, 3 rows tall (6 pixel rows with half-blocks)
-  let logoLines = imageToPixels(logoPath, 24, 3);
+  // Render logo at ~20 chars wide, 5 rows tall (smooth edges)
+  let logoLines = imageToPixels(logoPath, 20, 5);
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  // Get pixel art text
-  const textLines = getGbosTextPixels();
-
-  // Combine logo and text
-  const leftSide = combineLogoAndText(logoLines, textLines);
-  const leftWidth = 70; // Account for escape codes
+  const logoWidth = 28; // Account for escape codes
 
   // Build right side - Claude Code style (clean lines, no boxes)
   const rightLines = [];
 
   if (details) {
-    // Title line with version
     rightLines.push(`${BOLD}${colors.purple5}GBOS${RESET} ${DIM}v${version}${RESET}`);
-    // Account and App on same line
     rightLines.push(`${colors.white}${details.accountName || 'N/A'}${RESET} ${DIM}·${RESET} ${colors.purple5}${details.applicationName || 'N/A'}${RESET}`);
-    // Node info
     rightLines.push(`${DIM}${details.nodeName || 'N/A'}${RESET}`);
   }
 
   // Print side by side
   console.log('');
-  const maxLines = Math.max(leftSide.length, rightLines.length);
-  const leftStart = Math.floor((maxLines - leftSide.length) / 2);
+  const maxLines = Math.max(logoLines.length, rightLines.length);
+  const logoStart = Math.floor((maxLines - logoLines.length) / 2);
   const rightStart = Math.floor((maxLines - rightLines.length) / 2);
 
   for (let i = 0; i < maxLines; i++) {
-    const left = leftSide[i - leftStart] || '';
+    const left = logoLines[i - logoStart] || '';
     const right = rightLines[i - rightStart] || '';
-    // Pad left side accounting for ANSI codes (rough estimate)
     const visibleLen = left.replace(/\x1b\[[0-9;]*m/g, '').length;
-    const padding = ' '.repeat(Math.max(0, leftWidth - visibleLen));
+    const padding = ' '.repeat(Math.max(0, logoWidth - visibleLen));
     console.log(`  ${left}${padding}${right}`);
   }
   console.log('');
@@ -235,14 +229,11 @@ function displayAuthSuccess(data) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  let logoLines = imageToPixels(logoPath, 24, 6);
+  let logoLines = imageToPixels(logoPath, 20, 5);
   if (!logoLines) logoLines = COMPACT_LOGO;
 
-  const textLines = getGbosTextPixels();
-  const leftSide = combineLogoAndText(logoLines, textLines);
-  const leftWidth = 70;
+  const logoWidth = 28;
 
-  // Claude Code style - clean lines, no boxes
   const rightLines = [];
   rightLines.push(`${BOLD}${colors.purple5}GBOS${RESET} ${DIM}v${version}${RESET}`);
   rightLines.push(`${colors.purple5}✓${RESET} ${colors.white}Authenticated${RESET}`);
@@ -251,15 +242,15 @@ function displayAuthSuccess(data) {
   rightLines.push(`${DIM}Run "gbos connect" to connect${RESET}`);
 
   console.log('');
-  const maxLines = Math.max(leftSide.length, rightLines.length);
-  const leftStart = Math.floor((maxLines - leftSide.length) / 2);
+  const maxLines = Math.max(logoLines.length, rightLines.length);
+  const logoStart = Math.floor((maxLines - logoLines.length) / 2);
   const rightStart = Math.floor((maxLines - rightLines.length) / 2);
 
   for (let i = 0; i < maxLines; i++) {
-    const left = leftSide[i - leftStart] || '';
+    const left = logoLines[i - logoStart] || '';
     const right = rightLines[i - rightStart] || '';
     const visibleLen = left.replace(/\x1b\[[0-9;]*m/g, '').length;
-    const padding = ' '.repeat(Math.max(0, leftWidth - visibleLen));
+    const padding = ' '.repeat(Math.max(0, logoWidth - visibleLen));
     console.log(`  ${left}${padding}${right}`);
   }
   console.log('');
