@@ -4,7 +4,7 @@
   "description": "GBOS - Command line interface for GBOS services",
   "main": "src/index.js",
   "bin": {
-    "gbos": "./src/cli.js"
+    "gbos": "src/cli.js"
   },
   "scripts": {
     "start": "node src/index.js",
