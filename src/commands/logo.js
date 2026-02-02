@@ -9,7 +9,7 @@ async function logoCommand() {
   await displayImage(logoPath, {
     width: targetWidth,
     fallbackWidth: targetWidth,
-    fallbackHeight: 7,
+    fallbackHeight: 9,
     sharp: false,
     crop: true,
     alphaThreshold: 100,
