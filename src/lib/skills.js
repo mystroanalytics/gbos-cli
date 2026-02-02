@@ -152,50 +152,99 @@ function generateVSCodeTasks(workingDirectory) {
   return { file: '.vscode/tasks.json', status: 'created' };
 }
 
-// Register MCP server with Claude Code
+// Register MCP server with coding tools
 function registerMCPServer() {
   const results = [];
 
-  // Claude Code config locations
-  const configLocations = [
-    path.join(os.homedir(), '.claude', 'claude_desktop_config.json'),
-    path.join(os.homedir(), '.config', 'claude', 'config.json'),
+  // Tool configurations with their config file locations
+  const toolConfigs = [
+    // Claude Code / Claude Desktop
+    {
+      name: 'Claude Code',
+      paths: [
+        path.join(os.homedir(), '.claude', 'claude_desktop_config.json'),
+        path.join(os.homedir(), '.config', 'claude', 'config.json'),
+      ],
+      format: 'claude',
+    },
+    // Gemini CLI
+    {
+      name: 'Gemini CLI',
+      paths: [
+        path.join(os.homedir(), '.config', 'gemini', 'config.json'),
+        path.join(os.homedir(), '.gemini', 'config.json'),
+      ],
+      format: 'gemini',
+    },
+    // OpenAI Codex CLI
+    {
+      name: 'Codex CLI',
+      paths: [
+        path.join(os.homedir(), '.codex', 'config.json'),
+        path.join(os.homedir(), '.config', 'codex', 'config.json'),
+      ],
+      format: 'codex',
+    },
   ];
 
-  for (const configPath of configLocations) {
-    const configDir = path.dirname(configPath);
+  for (const tool of toolConfigs) {
+    for (const configPath of tool.paths) {
+      const configDir = path.dirname(configPath);
 
-    try {
-      // Ensure directory exists
-      if (!fs.existsSync(configDir)) {
-        fs.mkdirSync(configDir, { recursive: true });
-      }
-
-      let config = {};
-      if (fs.existsSync(configPath)) {
-        try {
-          config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        } catch (e) {
-          // Invalid JSON, start fresh
+      try {
+        // Ensure directory exists
+        if (!fs.existsSync(configDir)) {
+          fs.mkdirSync(configDir, { recursive: true });
         }
+
+        let config = {};
+        if (fs.existsSync(configPath)) {
+          try {
+            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          } catch (e) {
+            // Invalid JSON, start fresh
+          }
+        }
+
+        // Check if GBOS MCP server already registered
+        if (config.mcpServers?.gbos) {
+          results.push({ tool: tool.name, path: configPath, status: 'skipped', reason: 'Already registered' });
+          continue;
+        }
+
+        // Merge MCP config based on tool format
+        if (tool.format === 'claude') {
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            ...MCP_CONFIG.mcpServers,
+          };
+        } else if (tool.format === 'gemini') {
+          // Gemini uses similar format
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              url: MCP_CONFIG.mcpServers.gbos.url,
+              name: 'GBOS',
+              description: 'Generative Business Operating System task management',
+            },
+          };
+        } else if (tool.format === 'codex') {
+          // Codex uses similar format with additional metadata
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              url: MCP_CONFIG.mcpServers.gbos.url,
+              name: 'GBOS',
+              enabled: true,
+            },
+          };
+        }
+
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+        results.push({ tool: tool.name, path: configPath, status: 'registered' });
+      } catch (e) {
+        results.push({ tool: tool.name, path: configPath, status: 'error', reason: e.message });
       }
-
-      // Check if GBOS MCP server already registered
-      if (config.mcpServers?.gbos) {
-        results.push({ path: configPath, status: 'skipped', reason: 'Already registered' });
-        continue;
-      }
-
-      // Merge MCP config
-      config.mcpServers = {
-        ...(config.mcpServers || {}),
-        ...MCP_CONFIG.mcpServers,
-      };
-
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-      results.push({ path: configPath, status: 'registered' });
-    } catch (e) {
-      results.push({ path: configPath, status: 'error', reason: e.message });
     }
   }
 
