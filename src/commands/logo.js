@@ -4,12 +4,16 @@ const { displayImage, getTerminalWidth } = require('../lib/display');
 async function logoCommand() {
   const logoPath = path.join(__dirname, '../../images/logo-2.png');
   const terminalWidth = getTerminalWidth();
-  const targetWidth = Math.min(60, Math.max(30, terminalWidth - 10));
+  const targetWidth = Math.min(120, Math.max(40, terminalWidth - 4));
 
   await displayImage(logoPath, {
     width: targetWidth,
-    fallbackWidth: 40,
-    fallbackHeight: 12,
+    fallbackWidth: targetWidth,
+    fallbackHeight: null,
+    sharp: true,
+    crop: true,
+    alphaThreshold: 220,
+    cropAlphaThreshold: 220,
   });
 }
 

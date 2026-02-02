@@ -151,41 +151,74 @@ async function connectCommand(options) {
 
     console.log('\nFetching available applications...\n');
 
-    // Fetch available nodes
-    const nodesResponse = await api.listNodes();
-    const nodes = nodesResponse.data || [];
+    // Try to fetch applications directly first
+    let appOptions = [];
+    let nodesByApp = {};
 
-    if (nodes.length === 0) {
+    try {
+      // Try the applications endpoint first
+      const appsResponse = await api.listApplications();
+      const applications = appsResponse.data || [];
+
+      if (applications.length > 0) {
+        appOptions = applications.map((app) => ({
+          id: app.id,
+          name: app.name || `Application ${app.id}`,
+          description: app.description,
+          nodeCount: app.nodes_count || app.nodesCount || '?',
+          application: app,
+        }));
+      }
+    } catch (err) {
+      // Applications endpoint not available, fall back to deriving from nodes
+      if (process.env.DEBUG) {
+        console.log('Note: /cli/applications endpoint not available, falling back to nodes');
+      }
+    }
+
+    // If no applications from direct endpoint, derive from nodes
+    if (appOptions.length === 0) {
+      const nodesResponse = await api.listNodes();
+      const nodes = nodesResponse.data || [];
+
+      if (nodes.length === 0) {
+        displayMessageBox(
+          'No Nodes Available',
+          'No development nodes available. Please create a development node in the GBOS web interface.',
+          'warning'
+        );
+        process.exit(1);
+      }
+
+      // Group nodes by application
+      nodes.forEach((node) => {
+        const appId = node.application_id || 'unassigned';
+        if (nodesByApp[appId] === undefined) {
+          nodesByApp[appId] = {
+            application: node.application,
+            nodes: [],
+          };
+        }
+        nodesByApp[appId].nodes.push(node);
+      });
+
+      const appIds = Object.keys(nodesByApp);
+      appOptions = appIds.map((appId) => ({
+        id: appId,
+        name: nodesByApp[appId].application?.name || `Application ${appId}`,
+        nodeCount: nodesByApp[appId].nodes.length,
+        application: nodesByApp[appId].application,
+      }));
+    }
+
+    if (appOptions.length === 0) {
       displayMessageBox(
-        'No Nodes Available',
-        'No development nodes available. Please create a development node in the GBOS web interface.',
+        'No Applications Available',
+        'No applications found. Please create an application in the GBOS web interface.',
         'warning'
       );
       process.exit(1);
     }
-
-    // Group nodes by application
-    const nodesByApp = {};
-    nodes.forEach((node) => {
-      const appId = node.application_id || 'unassigned';
-      if (!nodesByApp[appId]) {
-        nodesByApp[appId] = {
-          application: node.application,
-          nodes: [],
-        };
-      }
-      nodesByApp[appId].nodes.push(node);
-    });
-
-    const appIds = Object.keys(nodesByApp);
-
-    // Build application options
-    const appOptions = appIds.map((appId) => ({
-      id: appId,
-      name: nodesByApp[appId].application?.name || `Application ${appId}`,
-      nodeCount: nodesByApp[appId].nodes.length,
-      application: nodesByApp[appId].application,
-    }));
 
     // Always show application selection (even if only one)
     const selectedApp = await selectWithArrows(
@@ -200,8 +233,28 @@ async function connectCommand(options) {
     }
 
     // Get nodes for selected application
-    const appNodes = nodesByApp[selectedApp.id].nodes;
-    const selectedApplication = nodesByApp[selectedApp.id].application;
+    let appNodes;
+    let selectedApplication = selectedApp.application;
+
+    if (nodesByApp[selectedApp.id]) {
+      // We already have nodes from the fallback path
+      appNodes = nodesByApp[selectedApp.id].nodes;
+      selectedApplication = nodesByApp[selectedApp.id].application || selectedApp.application;
+    } else {
+      // Fetch nodes for the selected application
+      console.log(`\nFetching nodes for ${selectedApp.name}...\n`);
+      const nodesResponse = await api.listNodes(selectedApp.id);
+      appNodes = nodesResponse.data || [];
+
+      if (appNodes.length === 0) {
+        displayMessageBox(
+          'No Nodes Available',
+          `No development nodes found for "${selectedApp.name}". Please create a development node in the GBOS web interface.`,
+          'warning'
+        );
+        return;
+      }
+    }
 
     // Build node options
     const nodeOptions = appNodes.map((node) => ({
