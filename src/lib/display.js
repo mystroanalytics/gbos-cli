@@ -112,39 +112,23 @@ function imageToPixels(imagePath, targetWidth = 24, targetHeight = 12) {
   }
 }
 
-// "gbos.io" pixel art (8 rows tall to match logo height)
-// Each character is approximately 5 wide, total ~35 wide
+// "gbos.io" pixel art (6 rows tall to match logo height - renders to 3 rows with half-blocks)
 function getGbosTextPixels() {
-  // 8-row pixel art for "gbos.io"
-  // Using purple gradient colors
-  const p1 = PURPLE.dark;
   const p2 = PURPLE.medium;
-  const p3 = PURPLE.light;
-  const p4 = PURPLE.bright;
 
-  // Pixel art bitmap for "gbos.io" - 8 rows, each row is pairs of pixels
-  // 0 = transparent, 1-4 = purple shades
+  // Compact 6-row pixel art for "gbos.io" (renders to 3 output rows)
   const bitmap = [
-    '  222  2222   222   2222       22   222  ',
-    ' 2   2 2   2 2   2 2          2  2 2   2 ',
-    ' 2     2   2 2   2 2         2    2   2  ',
-    ' 2 222 2222  2   2  222      2    2   2  ',
-    ' 2   2 2   2 2   2     2     2    2   2  ',
-    ' 2   2 2   2 2   2     2  22 2  2 2   2  ',
-    '  222  2222   222  2222   22  22   222   ',
-    '                                         ',
+    ' 222  222  222  222     2  222 ',
+    '2    2  2 2  2 2       22 2  2 ',
+    '2 22 222  2  2  22   2  2 2  2 ',
+    '2  2 2  2 2  2    2  2  2 2  2 ',
+    ' 22  222   22  222    22   22  ',
+    '                               ',
   ];
 
   const lines = [];
-  const colorMap = {
-    ' ': null,
-    '1': p1,
-    '2': p2,
-    '3': p3,
-    '4': p4,
-  };
+  const colorMap = { ' ': null, '2': p2 };
 
-  // Process 2 bitmap rows at a time into 1 output row (half-block technique)
   for (let row = 0; row < bitmap.length; row += 2) {
     let line = '';
     const topRow = bitmap[row] || '';
@@ -203,8 +187,8 @@ function displayLogoWithDetails(details = null) {
   const logoPath = path.join(__dirname, '../../images/logo.png');
   const version = require('../../package.json').version;
 
-  // Render logo at ~24 chars wide, 6 rows tall (12 pixel rows with half-blocks)
-  let logoLines = imageToPixels(logoPath, 24, 6);
+  // Render logo at ~24 chars wide, 3 rows tall (6 pixel rows with half-blocks)
+  let logoLines = imageToPixels(logoPath, 24, 3);
   if (!logoLines) logoLines = COMPACT_LOGO;
 
   // Get pixel art text
