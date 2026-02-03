@@ -157,7 +157,6 @@ function generateVSCodeTasks(workingDirectory) {
       { label: 'GBOS: Tasks', type: 'shell', command: 'gbos', args: ['tasks'] },
       { label: 'GBOS: Continue', type: 'shell', command: 'gbos', args: ['continue'] },
       { label: 'GBOS: Fallback', type: 'shell', command: 'gbos', args: ['fallback'] },
-      { label: 'GBOS: Auto', type: 'shell', command: 'gbos', args: ['auto'], isBackground: true },
     ]
   };
 
