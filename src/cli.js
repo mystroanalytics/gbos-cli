@@ -6,7 +6,7 @@ const program = new Command();
 const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
-const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, autoCommand, addTaskCommand } = require('./commands/tasks');
+const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand } = require('./commands/tasks');
 const config = require('./lib/config');
 const { displayStatus, printBanner } = require('./lib/display');
 
@@ -117,11 +117,6 @@ program
   .command('fallback')
   .description('Cancel work from the current task and revert to last completed state')
   .action(fallbackCommand);
-
-program
-  .command('auto')
-  .description('Automatically work through all tasks and poll for new ones')
-  .action(autoCommand);
 
 program
   .command('add_task')

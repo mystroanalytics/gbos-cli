@@ -342,83 +342,6 @@ async function fallbackCommand() {
   }
 }
 
-// Auto command - work on all tasks and poll for new ones
-async function autoCommand() {
-  if (!config.isAuthenticated()) {
-    displayMessageBox('Not Authenticated', 'Please run "gbos auth" first.', 'warning');
-    process.exit(1);
-  }
-
-  const connection = config.getConnection();
-  if (!connection) {
-    displayMessageBox('Not Connected', 'Please run "gbos connect" first.', 'warning');
-    process.exit(1);
-  }
-
-  const POLL_INTERVAL = 60000; // 1 minute
-
-  console.log(`\n${BOLD}Auto Mode${RESET}`);
-  console.log(`${DIM}Working through tasks and polling for new ones every minute...${RESET}\n`);
-  console.log(`${DIM}Press Ctrl+C to exit.${RESET}\n`);
-
-  const processNextTask = async () => {
-    try {
-      // Get next task
-      const response = await api.getNextTask();
-      const task = response.data;
-
-      if (!task) {
-        console.log(`${DIM}[${new Date().toLocaleTimeString()}] No pending tasks. Waiting...${RESET}`);
-        return false;
-      }
-
-      console.log(`\n${fg(...LOGO_LIGHT)}●${RESET} ${BOLD}Processing: ${task.title || task.name || task.id}${RESET}\n`);
-
-      // Mark task as in progress
-      if (task.status === 'pending') {
-        await api.startTask(task.id);
-      }
-
-      // Output the prompt for the coding agent
-      const prompt = generateAgentPrompt(task);
-      console.log(prompt);
-
-      return true;
-
-    } catch (error) {
-      if (error.status === 404) {
-        console.log(`${DIM}[${new Date().toLocaleTimeString()}] No pending tasks. Waiting...${RESET}`);
-        return false;
-      }
-      console.error(`${DIM}Error fetching task: ${error.message}${RESET}`);
-      return false;
-    }
-  };
-
-  // Process tasks in a loop
-  const runLoop = async () => {
-    while (true) {
-      const hadTask = await processNextTask();
-
-      if (!hadTask) {
-        // No task available, wait and poll again
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-      } else {
-        // Task was output, wait a bit before checking for more
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-    }
-  };
-
-  // Handle Ctrl+C gracefully
-  process.on('SIGINT', () => {
-    console.log(`\n\n${DIM}Auto mode stopped.${RESET}\n`);
-    process.exit(0);
-  });
-
-  await runLoop();
-}
-
 // Add task command - interactive task creation
 async function addTaskCommand() {
   if (!config.isAuthenticated()) {
@@ -615,7 +538,6 @@ module.exports = {
   nextTaskCommand,
   continueCommand,
   fallbackCommand,
-  autoCommand,
   addTaskCommand,
   generateAgentPrompt,
 };
