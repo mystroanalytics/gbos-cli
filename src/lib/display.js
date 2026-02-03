@@ -574,8 +574,8 @@ function displayConnectBanner(data) {
   console.log(`  ${dim}Use${RESET} ${cmd}gbos start${RESET} ${dim}to automatically fetch and execute tasks in the queue.${RESET}`);
   console.log(`  ${dim}For a full list of commands type${RESET} ${cmd}gbos -h${RESET}\n`);
 
-  console.log(`  Run your favorite ${highlight}coding agent${RESET} in this CLI to start working.`);
-  console.log(`  ${dim}Simply ask your agent to run these commands.${RESET}\n`);
+  console.log(`  ${dim}If you want to work with your favourite${RESET} ${highlight}coding agent${RESET}${dim}, run it in this terminal${RESET}`);
+  console.log(`  ${dim}and simply ask it to fetch and work on tasks from GBOS.${RESET}\n`);
 
   console.log(`  ${dim}Supported Agents:${RESET} ${highlight}Claude${RESET}, ${highlight}Codex${RESET}, ${highlight}Gemini${RESET}, ${highlight}Cursor IDE${RESET}, ${highlight}AntiGravity IDE${RESET}, ${highlight}VS Code IDE${RESET}\n`);
 }
