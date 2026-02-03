@@ -140,7 +140,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, auto, add_task, logout, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, add_task, logout, help');
       }
     } else {
       program.outputHelp();
