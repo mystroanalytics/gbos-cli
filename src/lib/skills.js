@@ -235,24 +235,33 @@ function generateVSCodeTasks(workingDirectory) {
 // Register MCP server with coding tools
 function registerMCPServer() {
   const results = [];
+  const mcpUrl = MCP_CONFIG.mcpServers.gbos.url;
 
   // Tool configurations with their config file locations
   const toolConfigs = [
-    // Claude Code / Claude Desktop
+    // Claude Code
     {
       name: 'Claude Code',
       paths: [
-        path.join(os.homedir(), '.claude', 'claude_desktop_config.json'),
-        path.join(os.homedir(), '.config', 'claude', 'config.json'),
+        path.join(os.homedir(), '.claude', 'settings.json'),
       ],
       format: 'claude',
+    },
+    // Claude Desktop
+    {
+      name: 'Claude Desktop',
+      paths: [
+        path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
+        path.join(os.homedir(), '.config', 'claude', 'claude_desktop_config.json'),
+      ],
+      format: 'claude-desktop',
     },
     // Gemini CLI
     {
       name: 'Gemini CLI',
       paths: [
-        path.join(os.homedir(), '.config', 'gemini', 'config.json'),
-        path.join(os.homedir(), '.gemini', 'config.json'),
+        path.join(os.homedir(), '.gemini', 'settings.json'),
+        path.join(os.homedir(), '.config', 'gemini', 'settings.json'),
       ],
       format: 'gemini',
     },
@@ -265,10 +274,41 @@ function registerMCPServer() {
       ],
       format: 'codex',
     },
+    // Cursor IDE
+    {
+      name: 'Cursor IDE',
+      paths: [
+        path.join(os.homedir(), '.cursor', 'mcp.json'),
+        path.join(os.homedir(), 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'mcp.json'),
+      ],
+      format: 'cursor',
+    },
+    // VS Code (with Copilot/Continue extension)
+    {
+      name: 'VS Code',
+      paths: [
+        path.join(os.homedir(), '.vscode', 'mcp.json'),
+        path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'mcp.json'),
+      ],
+      format: 'vscode',
+    },
+    // AntiGravity IDE
+    {
+      name: 'AntiGravity IDE',
+      paths: [
+        path.join(os.homedir(), '.antigravity', 'mcp.json'),
+        path.join(os.homedir(), '.config', 'antigravity', 'mcp.json'),
+      ],
+      format: 'antigravity',
+    },
   ];
 
   for (const tool of toolConfigs) {
+    let registered = false;
+
     for (const configPath of tool.paths) {
+      if (registered) break; // Only register once per tool
+
       const configDir = path.dirname(configPath);
 
       try {
@@ -289,39 +329,81 @@ function registerMCPServer() {
         // Check if GBOS MCP server already registered
         if (config.mcpServers?.gbos) {
           results.push({ tool: tool.name, path: configPath, status: 'skipped', reason: 'Already registered' });
+          registered = true;
           continue;
         }
 
         // Merge MCP config based on tool format
         if (tool.format === 'claude') {
-          config.mcpServers = {
-            ...(config.mcpServers || {}),
-            ...MCP_CONFIG.mcpServers,
-          };
-        } else if (tool.format === 'gemini') {
-          // Gemini uses similar format
+          // Claude Code uses settings.json with mcpServers
           config.mcpServers = {
             ...(config.mcpServers || {}),
             gbos: {
-              url: MCP_CONFIG.mcpServers.gbos.url,
+              type: 'url',
+              url: mcpUrl,
+            },
+          };
+        } else if (tool.format === 'claude-desktop') {
+          // Claude Desktop format
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              url: mcpUrl,
+            },
+          };
+        } else if (tool.format === 'gemini') {
+          // Gemini CLI format
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              httpUrl: mcpUrl,
               name: 'GBOS',
               description: 'Generative Business Operating System task management',
             },
           };
         } else if (tool.format === 'codex') {
-          // Codex uses similar format with additional metadata
+          // Codex CLI format
           config.mcpServers = {
             ...(config.mcpServers || {}),
             gbos: {
-              url: MCP_CONFIG.mcpServers.gbos.url,
+              url: mcpUrl,
               name: 'GBOS',
               enabled: true,
+            },
+          };
+        } else if (tool.format === 'cursor') {
+          // Cursor IDE format
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              url: mcpUrl,
+              transport: 'http',
+            },
+          };
+        } else if (tool.format === 'vscode') {
+          // VS Code format
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              url: mcpUrl,
+              transport: 'http',
+            },
+          };
+        } else if (tool.format === 'antigravity') {
+          // AntiGravity IDE format
+          config.mcpServers = {
+            ...(config.mcpServers || {}),
+            gbos: {
+              url: mcpUrl,
+              type: 'http',
+              name: 'GBOS',
             },
           };
         }
 
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
         results.push({ tool: tool.name, path: configPath, status: 'registered' });
+        registered = true;
       } catch (e) {
         results.push({ tool: tool.name, path: configPath, status: 'error', reason: e.message });
       }
