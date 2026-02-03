@@ -94,16 +94,57 @@ function generateAgentPrompt(task) {
 
   // Task ID for reference
   prompt += `**Task ID:** ${task.id}\n`;
+  if (task.task_key) {
+    prompt += `**Task Key:** ${task.task_key}\n`;
+  }
   if (task.priority) {
     prompt += `**Priority:** ${task.priority}\n`;
+  }
+  if (task.task_type || task.layer) {
+    prompt += `**Type:** ${task.task_type || ''}${task.layer ? ` (${task.layer})` : ''}\n`;
+  }
+  if (task.complexity) {
+    prompt += `**Complexity:** ${task.complexity}\n`;
+  }
+  if (task.estimated_minutes) {
+    prompt += `**Estimated Time:** ${task.estimated_minutes} minutes\n`;
   }
   prompt += '\n';
 
   // Main prompt/description
-  if (task.prompt) {
+  if (task.agent_prompt) {
+    prompt += `## Instructions\n\n${task.agent_prompt}\n\n`;
+  } else if (task.prompt) {
     prompt += `## Instructions\n\n${task.prompt}\n\n`;
   } else if (task.description) {
     prompt += `## Description\n\n${task.description}\n\n`;
+  }
+
+  // Acceptance criteria
+  if (task.acceptance_criteria && task.acceptance_criteria.length > 0) {
+    prompt += `## Acceptance Criteria\n\n`;
+    task.acceptance_criteria.forEach((criteria, i) => {
+      prompt += `- ${criteria}\n`;
+    });
+    prompt += '\n';
+  }
+
+  // Target files
+  if (task.target_files && task.target_files.length > 0) {
+    prompt += `## Target Files\n\n`;
+    task.target_files.forEach((file) => {
+      prompt += `- ${file}\n`;
+    });
+    prompt += '\n';
+  }
+
+  // Dependencies
+  if (task.dependencies && task.dependencies.length > 0) {
+    prompt += `## Dependencies\n\n`;
+    task.dependencies.forEach((dep) => {
+      prompt += `- ${dep}\n`;
+    });
+    prompt += '\n';
   }
 
   // Metadata
@@ -111,6 +152,14 @@ function generateAgentPrompt(task) {
     prompt += `## Metadata\n\n`;
     prompt += '```json\n';
     prompt += JSON.stringify(task.metadata, null, 2);
+    prompt += '\n```\n\n';
+  }
+
+  // Agent context
+  if (task.agent_context && Object.keys(task.agent_context).length > 0) {
+    prompt += `## Agent Context\n\n`;
+    prompt += '```json\n';
+    prompt += JSON.stringify(task.agent_context, null, 2);
     prompt += '\n```\n\n';
   }
 
@@ -130,7 +179,79 @@ function generateAgentPrompt(task) {
     prompt += `## Context\n\n${task.node_context || task.context}\n\n`;
   }
 
+  // Plan info
+  if (task.plan) {
+    prompt += `## Plan\n\n`;
+    prompt += `- **Plan:** ${task.plan.name || task.plan.id}\n`;
+    if (task.plan.uuid) {
+      prompt += `- **Plan ID:** ${task.plan.uuid}\n`;
+    }
+    prompt += '\n';
+  }
+
   return prompt;
+}
+
+// Display full task details
+function displayTaskDetails(task) {
+  const termWidth = getTerminalWidth();
+  const tableWidth = Math.min(80, termWidth - 4);
+
+  console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+  console.log(`${BOLD}  Task Details${RESET}`);
+  console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+
+  // Basic info
+  console.log(`  ${BOLD}${task.title || task.name || 'Unnamed Task'}${RESET}`);
+  console.log(`  ${DIM}ID: ${task.id}${task.task_key ? ` | Key: ${task.task_key}` : ''}${RESET}\n`);
+
+  // Status and priority
+  const formatted = formatTask(task);
+  console.log(`  ${DIM}Status:${RESET}     ${formatted.statusDisplay}`);
+  console.log(`  ${DIM}Priority:${RESET}   ${task.priority || 'normal'}`);
+  if (task.task_type) console.log(`  ${DIM}Type:${RESET}       ${task.task_type}${task.layer ? ` (${task.layer})` : ''}`);
+  if (task.complexity) console.log(`  ${DIM}Complexity:${RESET} ${task.complexity}`);
+  if (task.estimated_minutes) console.log(`  ${DIM}Estimate:${RESET}   ${task.estimated_minutes} minutes`);
+  console.log('');
+
+  // Description
+  if (task.description) {
+    console.log(`  ${DIM}Description:${RESET}`);
+    console.log(`  ${task.description}\n`);
+  }
+
+  // Instructions/Prompt
+  if (task.agent_prompt || task.prompt) {
+    console.log(`  ${DIM}Instructions:${RESET}`);
+    const instructions = task.agent_prompt || task.prompt;
+    const lines = instructions.split('\n');
+    lines.forEach(line => console.log(`  ${line}`));
+    console.log('');
+  }
+
+  // Acceptance criteria
+  if (task.acceptance_criteria && task.acceptance_criteria.length > 0) {
+    console.log(`  ${DIM}Acceptance Criteria:${RESET}`);
+    task.acceptance_criteria.forEach((criteria, i) => {
+      console.log(`    ${i + 1}. ${criteria}`);
+    });
+    console.log('');
+  }
+
+  // Target files
+  if (task.target_files && task.target_files.length > 0) {
+    console.log(`  ${DIM}Target Files:${RESET}`);
+    task.target_files.forEach(file => console.log(`    - ${file}`));
+    console.log('');
+  }
+
+  // Plan info
+  if (task.plan) {
+    console.log(`  ${DIM}Plan:${RESET} ${task.plan.name || task.plan.id}`);
+    console.log('');
+  }
+
+  console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
 }
 
 // List tasks command
@@ -160,24 +281,39 @@ async function tasksCommand() {
     console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
 
     if (tasks.length === 0) {
-      console.log(`  ${DIM}No tasks assigned to this node.${RESET}\n`);
-    } else {
-      tasks.forEach((task, index) => {
-        const formatted = formatTask(task, index);
-        console.log(`  ${formatted.statusDisplay}  ${BOLD}${formatted.title}${RESET}`);
-        console.log(`     ${DIM}ID: ${formatted.id} | Priority: ${formatted.priority}${RESET}`);
-        if (index < tasks.length - 1) console.log('');
-      });
+      console.log(`  ${DIM}No tasks assigned to this node.${RESET}`);
+      console.log(`  ${DIM}Use "gbos next" to fetch and auto-assign the next available task.${RESET}\n`);
+      console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+      return;
     }
+
+    // Show numbered list
+    tasks.forEach((task, index) => {
+      const formatted = formatTask(task, index);
+      console.log(`  ${CYAN}${index + 1}.${RESET} ${formatted.statusDisplay}  ${BOLD}${formatted.title}${RESET}`);
+      console.log(`     ${DIM}ID: ${formatted.id} | Priority: ${formatted.priority}${RESET}`);
+      if (index < tasks.length - 1) console.log('');
+    });
 
     console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
     console.log(`${DIM}  Total: ${tasks.length} task(s)${RESET}\n`);
 
     // Show meta info if available
-    if (response.meta) {
-      if (response.meta.total > tasks.length) {
-        console.log(`${DIM}  Showing ${tasks.length} of ${response.meta.total} total tasks${RESET}\n`);
-      }
+    if (response.meta && response.meta.total > tasks.length) {
+      console.log(`${DIM}  Showing ${tasks.length} of ${response.meta.total} total tasks${RESET}\n`);
+    }
+
+    // Allow user to select a task to view details
+    const rl = createReadlineInterface();
+    const answer = await new Promise((resolve) => {
+      rl.question(`  ${CYAN}?${RESET} Enter task number to view details ${DIM}(or press Enter to skip)${RESET}: `, resolve);
+    });
+    rl.close();
+
+    const taskNum = parseInt(answer.trim(), 10);
+    if (taskNum >= 1 && taskNum <= tasks.length) {
+      const selectedTask = tasks[taskNum - 1];
+      displayTaskDetails(selectedTask);
     }
 
   } catch (error) {
@@ -230,19 +366,10 @@ async function nextTaskCommand() {
       return;
     }
 
-    const formatted = formatTask(task);
-    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}`);
-    console.log(`${BOLD}  Next Task${RESET}`);
-    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}\n`);
-    console.log(`  ${formatted.statusDisplay}  ${BOLD}${formatted.title}${RESET}`);
-    console.log(`  ${DIM}ID: ${formatted.id} | Priority: ${formatted.priority}${RESET}\n`);
+    // Show full task details
+    displayTaskDetails(task);
 
-    if (task.prompt || task.description) {
-      console.log(`  ${DIM}${(task.prompt || task.description).substring(0, 100)}...${RESET}\n`);
-    }
-
-    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}`);
-    console.log(`${DIM}  Run "gbos continue" to start working on this task.${RESET}\n`);
+    console.log(`\n  ${DIM}Run "gbos continue" to start working on this task.${RESET}\n`);
 
   } catch (error) {
     if (error.status === 404) {
@@ -270,6 +397,7 @@ async function continueCommand() {
   try {
     // First check for current in-progress task
     let task;
+    let isNewTask = false;
     try {
       const currentResponse = await api.getCurrentTask();
       // API returns { data: { task, node } } or { data: task }
@@ -284,6 +412,7 @@ async function continueCommand() {
       nextResponse = await api.getNextTask();
       // API returns { data: { task, node } } or { data: task }
       task = nextResponse.data?.task || nextResponse.data;
+      isNewTask = true;
     }
 
     if (!task) {
@@ -300,11 +429,30 @@ async function continueCommand() {
     // Mark task as in progress if it's pending or assigned
     if (task.status === 'pending' || task.status === 'assigned') {
       await api.startTask(task.id);
+      task.status = 'in_progress';
     }
 
-    // Output the prompt for the coding agent
+    // Show full task details
+    displayTaskDetails(task);
+
+    // Generate the prompt for the coding agent
     const prompt = generateAgentPrompt(task);
+
+    // Show instructions
+    const termWidth = getTerminalWidth();
+    const tableWidth = Math.min(80, termWidth - 4);
+
+    console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+    console.log(`${BOLD}  Task Prompt for Coding Agent${RESET}`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+
+    // Show the prompt
     console.log(prompt);
+
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+    console.log(`\n  ${GREEN}✓${RESET} ${BOLD}Task is now in progress!${RESET}\n`);
+    console.log(`  ${DIM}Copy the prompt above and paste it into your favourite coding agent.${RESET}`);
+    console.log(`  ${DIM}Supported agents: Claude, Codex, Gemini, Cursor, VS Code, AntiGravity${RESET}\n`);
 
   } catch (error) {
     if (error.status === 404) {
