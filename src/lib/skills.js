@@ -17,10 +17,6 @@ const SKILLS = {
 
 This project uses GBOS (Generative Business Operating System) for task management.
 
-## /gbos Command
-
-When the user types \`/gbos\` or asks about GBOS commands, run \`gbos status\` to show the current status, then list the available commands below.
-
 ## Available Commands
 
 Run these in the terminal:
@@ -40,12 +36,6 @@ Run these in the terminal:
 1. Run \`gbos continue\` to get your next task
 2. Follow the task instructions provided
 3. When done, run \`gbos continue\` for the next task
-
-## Quick Actions
-
-- To check status: Run \`gbos status\`
-- To get work: Run \`gbos continue\`
-- To see all tasks: Run \`gbos tasks\`
 `,
 
   '.cursorrules': () => `# GBOS Task Management
@@ -112,6 +102,61 @@ gbos add_task    # Create new task
 3. Run: gbos continue (next task)
 `,
 };
+
+// Claude Code skill content
+const CLAUDE_CODE_SKILL = `---
+description: Show GBOS status and available commands
+---
+
+# /gbos - GBOS Task Management
+
+When this skill is invoked, run the following steps:
+
+1. Execute \`gbos status\` in the terminal to show the current connection status
+2. Display the available GBOS commands to the user
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| \`gbos status\` | Show current authentication and connection status |
+| \`gbos tasks\` | List all tasks assigned to this development node |
+| \`gbos continue\` | Get the next task prompt to work on |
+| \`gbos next\` | Preview the next task in the queue |
+| \`gbos fallback\` | Cancel current task and revert changes |
+| \`gbos add_task\` | Create a new task interactively |
+| \`gbos disconnect\` | Disconnect from the current node |
+
+## Workflow
+
+1. Run \`gbos continue\` to get your next task
+2. Follow the task instructions provided
+3. When done, run \`gbos continue\` for the next task
+`;
+
+// Generate Claude Code skill file
+function generateClaudeCodeSkill(workingDirectory) {
+  const skillsDir = path.join(workingDirectory, '.claude', 'skills');
+  const skillFile = path.join(skillsDir, 'gbos.md');
+
+  try {
+    // Create .claude/skills directory if it doesn't exist
+    if (!fs.existsSync(skillsDir)) {
+      fs.mkdirSync(skillsDir, { recursive: true });
+    }
+
+    // Check if skill file already exists
+    if (fs.existsSync(skillFile)) {
+      return { file: '.claude/skills/gbos.md', status: 'skipped', reason: 'Already exists' };
+    }
+
+    // Write skill file
+    fs.writeFileSync(skillFile, CLAUDE_CODE_SKILL, 'utf8');
+    return { file: '.claude/skills/gbos.md', status: 'created' };
+  } catch (e) {
+    return { file: '.claude/skills/gbos.md', status: 'error', reason: e.message };
+  }
+}
 
 // Generate skills files in the working directory
 function generateSkillsFiles(workingDirectory) {
@@ -289,6 +334,7 @@ function setupProjectSkills(workingDirectory) {
   const results = {
     skills: generateSkillsFiles(workingDirectory),
     vscode: generateVSCodeTasks(workingDirectory),
+    claudeCodeSkill: generateClaudeCodeSkill(workingDirectory),
   };
 
   return results;
@@ -297,6 +343,7 @@ function setupProjectSkills(workingDirectory) {
 module.exports = {
   generateSkillsFiles,
   generateVSCodeTasks,
+  generateClaudeCodeSkill,
   registerMCPServer,
   setupProjectSkills,
   MCP_CONFIG,
