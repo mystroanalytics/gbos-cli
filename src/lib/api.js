@@ -131,8 +131,9 @@ class GbosApiClient {
     });
   }
 
-  async getNextTask() {
-    return this.request('/cli/tasks/next', {
+  async getNextTask(autoAssign = true) {
+    const query = autoAssign ? '?auto_assign=true' : '';
+    return this.request(`/cli/tasks/next${query}`, {
       method: 'GET',
     });
   }
