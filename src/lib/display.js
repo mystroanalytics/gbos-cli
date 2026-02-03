@@ -13,8 +13,8 @@ const fg = (r, g, b) => `${ESC}[38;2;${r};${g};${b}m`;
 const bg = (r, g, b) => `${ESC}[48;2;${r};${g};${b}m`;
 
 // GBOS brand colors from logo
-const LOGO_NAVY = [36, 31, 102];     // Primary Deep Indigo
-const LOGO_LIGHT = [85, 110, 255];   // Lighter blue for gradient
+const LOGO_PURPLE = [140, 50, 200];  // Purple for gradient start
+const LOGO_LIGHT = [85, 110, 255];   // Lighter blue for gradient end
 
 // Purple theme RGB values (legacy)
 const PURPLE = {
@@ -449,9 +449,9 @@ function printBanner() {
     let coloredLine = '';
     for (let i = 0; i < line.length; i++) {
       const ratio = i / line.length;
-      const r = Math.floor(LOGO_NAVY[0] + (LOGO_LIGHT[0] - LOGO_NAVY[0]) * ratio);
-      const g = Math.floor(LOGO_NAVY[1] + (LOGO_LIGHT[1] - LOGO_NAVY[1]) * ratio);
-      const b = Math.floor(LOGO_NAVY[2] + (LOGO_LIGHT[2] - LOGO_NAVY[2]) * ratio);
+      const r = Math.floor(LOGO_PURPLE[0] + (LOGO_LIGHT[0] - LOGO_PURPLE[0]) * ratio);
+      const g = Math.floor(LOGO_PURPLE[1] + (LOGO_LIGHT[1] - LOGO_PURPLE[1]) * ratio);
+      const b = Math.floor(LOGO_PURPLE[2] + (LOGO_LIGHT[2] - LOGO_PURPLE[2]) * ratio);
 
       if (line[i] === ' ') {
         coloredLine += ' ';
@@ -481,7 +481,7 @@ function printStatusTable(leftColumn, rightColumn) {
   const termWidth = getTerminalWidth();
   const tableWidth = Math.min(80, termWidth - 4);
   const colWidth = Math.floor((tableWidth - 3) / 2); // -3 for borders and divider
-  const borderColor = fg(...LOGO_NAVY);
+  const borderColor = fg(...LOGO_PURPLE);
   const labelColor = DIM;
 
   // Helper to get value color based on field and value
@@ -582,7 +582,6 @@ function displayConnectBanner(data) {
   console.log(`    ${cmd}next${RESET}                Get the next task in the queue`);
   console.log(`    ${cmd}continue${RESET}            Continue working on current/next task`);
   console.log(`    ${cmd}fallback${RESET}            Cancel current task and revert to last completed state`);
-  console.log(`    ${cmd}auto${RESET}                Automatically work through all tasks and poll for new ones`);
   console.log(`    ${cmd}add_task${RESET}            Create a new task interactively`);
   console.log(`    ${cmd}logout${RESET} ${dim}[options]${RESET}    Log out from GBOS services and clear credentials`);
   console.log(`    ${cmd}help${RESET} ${dim}[command]${RESET}      Display help for a specific command\n`);
@@ -631,7 +630,7 @@ module.exports = {
   displayAuthBanner,
   fg,
   bg,
-  LOGO_NAVY,
+  LOGO_PURPLE,
   LOGO_LIGHT,
   RESET,
   BOLD,

@@ -1,6 +1,6 @@
 const api = require('../lib/api');
 const config = require('../lib/config');
-const { displayMessageBox, printBanner, printStatusTable, fg, LOGO_LIGHT, LOGO_NAVY, RESET, BOLD, DIM, getTerminalWidth } = require('../lib/display');
+const { displayMessageBox, printBanner, printStatusTable, fg, LOGO_LIGHT, LOGO_PURPLE, RESET, BOLD, DIM, getTerminalWidth } = require('../lib/display');
 const readline = require('readline');
 
 // Colors for prompts
@@ -155,9 +155,9 @@ async function tasksCommand() {
     const termWidth = getTerminalWidth();
     const tableWidth = Math.min(100, termWidth - 4);
 
-    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(tableWidth)}${RESET}`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
     console.log(`${BOLD}  Tasks for ${connection.node?.name || 'this node'}${RESET}`);
-    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(tableWidth)}${RESET}\n`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
 
     if (tasks.length === 0) {
       console.log(`  ${DIM}No tasks assigned to this node.${RESET}\n`);
@@ -170,7 +170,7 @@ async function tasksCommand() {
       });
     }
 
-    console.log(`\n${fg(...LOGO_NAVY)}${'─'.repeat(tableWidth)}${RESET}`);
+    console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
     console.log(`${DIM}  Total: ${tasks.length} task(s)${RESET}\n`);
 
     // Show meta info if available
@@ -224,9 +224,9 @@ async function nextTaskCommand() {
     }
 
     const formatted = formatTask(task);
-    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}`);
     console.log(`${BOLD}  Next Task${RESET}`);
-    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}\n`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}\n`);
     console.log(`  ${formatted.statusDisplay}  ${BOLD}${formatted.title}${RESET}`);
     console.log(`  ${DIM}ID: ${formatted.id} | Priority: ${formatted.priority}${RESET}\n`);
 
@@ -234,7 +234,7 @@ async function nextTaskCommand() {
       console.log(`  ${DIM}${(task.prompt || task.description).substring(0, 100)}...${RESET}\n`);
     }
 
-    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}`);
     console.log(`${DIM}  Run "gbos continue" to start working on this task.${RESET}\n`);
 
   } catch (error) {
@@ -482,9 +482,9 @@ async function addTaskCommand() {
     }
 
     // Show summary
-    console.log(`\n${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}`);
+    console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}`);
     console.log(`${BOLD}  Task Summary${RESET}`);
-    console.log(`${fg(...LOGO_NAVY)}${'─'.repeat(60)}${RESET}\n`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(60)}${RESET}\n`);
     console.log(`  ${DIM}Title:${RESET} ${title}`);
     console.log(`  ${DIM}Type:${RESET} ${taskType}`);
     console.log(`  ${DIM}Priority:${RESET} ${priority}`);
