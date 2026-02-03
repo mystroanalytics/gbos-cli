@@ -219,7 +219,13 @@ async function nextTaskCommand() {
     const task = response.data;
 
     if (!task) {
-      console.log(`${DIM}No pending tasks available.${RESET}\n`);
+      if (response.pending_tasks_count > 0) {
+        console.log(`${DIM}${response.message || 'No tasks assigned to this node.'}${RESET}`);
+        console.log(`${DIM}Pending tasks in queue: ${response.pending_tasks_count}${RESET}`);
+        console.log(`${DIM}Tasks may need to be assigned to this node from the GBOS dashboard.${RESET}\n`);
+      } else {
+        console.log(`${DIM}No pending tasks available.${RESET}\n`);
+      }
       return;
     }
 
@@ -271,13 +277,20 @@ async function continueCommand() {
     }
 
     // If no current task, get next task
+    let nextResponse;
     if (!task) {
-      const response = await api.getNextTask();
-      task = response.data;
+      nextResponse = await api.getNextTask();
+      task = nextResponse.data;
     }
 
     if (!task) {
-      console.log(`${DIM}No tasks available to continue.${RESET}\n`);
+      if (nextResponse && nextResponse.pending_tasks_count > 0) {
+        console.log(`${DIM}${nextResponse.message || 'No tasks assigned to this node.'}${RESET}`);
+        console.log(`${DIM}Pending tasks in queue: ${nextResponse.pending_tasks_count}${RESET}`);
+        console.log(`${DIM}Tasks may need to be assigned to this node from the GBOS dashboard.${RESET}\n`);
+      } else {
+        console.log(`${DIM}No tasks available to continue.${RESET}\n`);
+      }
       return;
     }
 
