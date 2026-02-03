@@ -6,7 +6,7 @@ const program = new Command();
 const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
-const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand } = require('./commands/tasks');
+const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand, completedCommand } = require('./commands/tasks');
 const { syncStartCommand, syncStopCommand, syncStatusCommand, syncNowCommand, repoCreateCommand, repoListCommand, repoCloneCommand } = require('./commands/gitlab');
 const { registryLoginCommand, registryImagesCommand, registryPushCommand, registryPullCommand } = require('./commands/registry');
 const config = require('./lib/config');
@@ -119,6 +119,13 @@ program
   .command('fallback')
   .description('Cancel work from the current task and revert to last completed state')
   .action(fallbackCommand);
+
+program
+  .command('completed')
+  .alias('done')
+  .description('Complete current task: commit, push to GitLab (creates repo if needed), and mark task done')
+  .option('-m, --message <message>', 'Custom commit message')
+  .action(completedCommand);
 
 program
   .command('add_task')
@@ -237,7 +244,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, add_task, logout, gitlab, registry, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, logout, gitlab, registry, help');
       }
     } else {
       program.outputHelp();

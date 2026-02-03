@@ -2,6 +2,9 @@ const api = require('../lib/api');
 const config = require('../lib/config');
 const { displayMessageBox, printBanner, printStatusTable, fg, LOGO_LIGHT, LOGO_PURPLE, RESET, BOLD, DIM, getTerminalWidth } = require('../lib/display');
 const readline = require('readline');
+const { exec, spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
 // Colors for prompts
 const CYAN = '\x1b[36m';
@@ -697,11 +700,265 @@ async function addTaskCommand() {
   }
 }
 
+// Execute git command
+function execGit(args, cwd = process.cwd()) {
+  return new Promise((resolve, reject) => {
+    exec(`git ${args}`, { cwd, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr || error.message));
+      } else {
+        resolve(stdout.trim());
+      }
+    });
+  });
+}
+
+// Get GitLab URL and token from session or env
+function getGitLabConfig() {
+  const session = config.loadSession();
+  return {
+    url: session?.gitlab_url || process.env.GITLAB_URL || 'https://gitlab.com',
+    token: session?.gitlab_token || process.env.GITLAB_TOKEN || null,
+  };
+}
+
+// Completed command - commit, push, and complete task
+async function completedCommand(options) {
+  const cwd = process.cwd();
+  const dirName = path.basename(cwd);
+
+  console.log(`\n${DIM}Processing completion...${RESET}\n`);
+
+  // Step 1: Check if current directory is a git repo
+  let isGitRepo = false;
+  let hasRemote = false;
+  let remoteUrl = '';
+
+  try {
+    await execGit('rev-parse --is-inside-work-tree', cwd);
+    isGitRepo = true;
+    console.log(`  ${GREEN}✓${RESET} Git repository detected`);
+
+    // Check for remote
+    try {
+      remoteUrl = await execGit('remote get-url origin', cwd);
+      hasRemote = true;
+      console.log(`  ${GREEN}✓${RESET} Remote: ${remoteUrl}`);
+    } catch (e) {
+      hasRemote = false;
+      console.log(`  ${YELLOW}!${RESET} No remote configured`);
+    }
+  } catch (e) {
+    isGitRepo = false;
+    console.log(`  ${YELLOW}!${RESET} Not a git repository`);
+  }
+
+  // Step 2: Initialize git if needed
+  if (!isGitRepo) {
+    console.log(`\n  ${DIM}Initializing git repository...${RESET}`);
+    try {
+      await execGit('init', cwd);
+      isGitRepo = true;
+      console.log(`  ${GREEN}✓${RESET} Git repository initialized`);
+    } catch (e) {
+      displayMessageBox('Error', `Failed to initialize git: ${e.message}`, 'error');
+      process.exit(1);
+    }
+  }
+
+  // Step 3: Create GitLab repo if no remote
+  if (!hasRemote) {
+    const gitlab = getGitLabConfig();
+
+    if (!gitlab.token) {
+      console.log(`\n  ${YELLOW}!${RESET} No GitLab token configured.`);
+      console.log(`  ${DIM}Set GITLAB_TOKEN environment variable to auto-create repos.${RESET}`);
+      console.log(`  ${DIM}Skipping remote setup...${RESET}\n`);
+    } else {
+      console.log(`\n  ${DIM}Creating GitLab repository "${dirName}"...${RESET}`);
+
+      try {
+        const response = await fetch(`${gitlab.url}/api/v4/projects`, {
+          method: 'POST',
+          headers: {
+            'PRIVATE-TOKEN': gitlab.token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: dirName,
+            visibility: 'private',
+            initialize_with_readme: false,
+          }),
+        });
+
+        if (response.ok) {
+          const repo = await response.json();
+          remoteUrl = repo.ssh_url_to_repo || repo.http_url_to_repo;
+
+          // Add remote
+          await execGit(`remote add origin ${remoteUrl}`, cwd);
+          hasRemote = true;
+
+          console.log(`  ${GREEN}✓${RESET} GitLab repository created: ${repo.web_url}`);
+          console.log(`  ${GREEN}✓${RESET} Remote added: ${remoteUrl}`);
+        } else {
+          const error = await response.json();
+          if (error.message && error.message.includes('has already been taken')) {
+            // Repo exists, try to find and add it
+            console.log(`  ${YELLOW}!${RESET} Repository "${dirName}" already exists on GitLab`);
+
+            // Try to get user info and construct URL
+            try {
+              const userResponse = await fetch(`${gitlab.url}/api/v4/user`, {
+                headers: { 'PRIVATE-TOKEN': gitlab.token },
+              });
+              if (userResponse.ok) {
+                const user = await userResponse.json();
+                remoteUrl = `git@${new URL(gitlab.url).hostname}:${user.username}/${dirName}.git`;
+                await execGit(`remote add origin ${remoteUrl}`, cwd);
+                hasRemote = true;
+                console.log(`  ${GREEN}✓${RESET} Remote added: ${remoteUrl}`);
+              }
+            } catch (e) {
+              console.log(`  ${DIM}Could not auto-configure remote. Add manually with:${RESET}`);
+              console.log(`  ${DIM}git remote add origin <your-repo-url>${RESET}`);
+            }
+          } else {
+            console.log(`  ${YELLOW}!${RESET} Failed to create repo: ${error.message || response.status}`);
+          }
+        }
+      } catch (e) {
+        console.log(`  ${YELLOW}!${RESET} Failed to create GitLab repo: ${e.message}`);
+      }
+    }
+  }
+
+  // Step 4: Stage all changes
+  console.log(`\n  ${DIM}Staging changes...${RESET}`);
+  try {
+    await execGit('add -A', cwd);
+    console.log(`  ${GREEN}✓${RESET} Changes staged`);
+  } catch (e) {
+    console.log(`  ${YELLOW}!${RESET} Failed to stage: ${e.message}`);
+  }
+
+  // Step 5: Check for changes to commit
+  let hasChanges = false;
+  try {
+    const status = await execGit('status --porcelain', cwd);
+    hasChanges = status.length > 0;
+  } catch (e) {
+    // Assume changes exist
+    hasChanges = true;
+  }
+
+  // Step 6: Commit changes
+  if (hasChanges) {
+    console.log(`  ${DIM}Committing changes...${RESET}`);
+
+    // Get current task for commit message
+    let taskInfo = '';
+    try {
+      if (config.isAuthenticated() && config.getConnection()) {
+        const currentResponse = await api.getCurrentTask();
+        const task = currentResponse.data?.task || currentResponse.data;
+        if (task) {
+          taskInfo = task.task_key ? `[${task.task_key}] ` : `[Task #${task.id}] `;
+        }
+      }
+    } catch (e) {
+      // No task info available
+    }
+
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const commitMessage = options.message || `${taskInfo}Completed: ${timestamp}`;
+
+    try {
+      await execGit(`commit -m "${commitMessage.replace(/"/g, '\\"')}"`, cwd);
+      console.log(`  ${GREEN}✓${RESET} Changes committed: "${commitMessage}"`);
+    } catch (e) {
+      if (e.message.includes('nothing to commit')) {
+        console.log(`  ${DIM}No changes to commit${RESET}`);
+      } else {
+        console.log(`  ${YELLOW}!${RESET} Commit failed: ${e.message}`);
+      }
+    }
+  } else {
+    console.log(`  ${DIM}No changes to commit${RESET}`);
+  }
+
+  // Step 7: Push to remote
+  if (hasRemote) {
+    console.log(`  ${DIM}Pushing to remote...${RESET}`);
+    try {
+      // Try to get current branch
+      let branch = 'main';
+      try {
+        branch = await execGit('rev-parse --abbrev-ref HEAD', cwd);
+      } catch (e) {
+        branch = 'main';
+      }
+
+      // Push with upstream tracking
+      try {
+        await execGit(`push -u origin ${branch}`, cwd);
+        console.log(`  ${GREEN}✓${RESET} Pushed to origin/${branch}`);
+      } catch (e) {
+        // If push fails, try setting upstream
+        if (e.message.includes('no upstream branch')) {
+          await execGit(`push --set-upstream origin ${branch}`, cwd);
+          console.log(`  ${GREEN}✓${RESET} Pushed to origin/${branch}`);
+        } else {
+          throw e;
+        }
+      }
+    } catch (e) {
+      console.log(`  ${YELLOW}!${RESET} Push failed: ${e.message}`);
+      console.log(`  ${DIM}You may need to push manually with: git push -u origin main${RESET}`);
+    }
+  }
+
+  // Step 8: Mark GBOS task as complete (if authenticated and connected)
+  if (config.isAuthenticated() && config.getConnection()) {
+    try {
+      const currentResponse = await api.getCurrentTask();
+      const task = currentResponse.data?.task || currentResponse.data;
+
+      if (task && task.status === 'in_progress') {
+        console.log(`\n  ${DIM}Marking GBOS task as complete...${RESET}`);
+        await api.completeTask(task.id, {
+          completion_notes: options.message || 'Completed via gbos completed command',
+        });
+        console.log(`  ${GREEN}✓${RESET} Task "${task.title || task.id}" marked as complete`);
+      }
+    } catch (e) {
+      // Task completion is optional, don't fail the whole command
+      if (e.status !== 404) {
+        console.log(`  ${DIM}Note: Could not update GBOS task status${RESET}`);
+      }
+    }
+  }
+
+  // Final summary
+  const termWidth = getTerminalWidth();
+  const tableWidth = Math.min(60, termWidth - 4);
+
+  console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+  console.log(`${GREEN}✓${RESET} ${BOLD}Completion finished!${RESET}`);
+  console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+
+  if (remoteUrl) {
+    console.log(`  ${DIM}Repository:${RESET} ${remoteUrl}`);
+  }
+  console.log(`  ${DIM}Run "gbos continue" to start the next task.${RESET}\n`);
+}
+
 module.exports = {
   tasksCommand,
   nextTaskCommand,
   continueCommand,
   fallbackCommand,
   addTaskCommand,
+  completedCommand,
   generateAgentPrompt,
 };
