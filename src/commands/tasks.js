@@ -216,7 +216,8 @@ async function nextTaskCommand() {
   try {
     console.log('\nFetching next task...\n');
     const response = await api.getNextTask();
-    const task = response.data;
+    // API returns { data: { task, node } } or { data: task }
+    const task = response.data?.task || response.data;
 
     if (!task) {
       if (response.pending_tasks_count > 0) {
@@ -271,7 +272,8 @@ async function continueCommand() {
     let task;
     try {
       const currentResponse = await api.getCurrentTask();
-      task = currentResponse.data;
+      // API returns { data: { task, node } } or { data: task }
+      task = currentResponse.data?.task || currentResponse.data;
     } catch (e) {
       // No current task, get next one
     }
@@ -280,7 +282,8 @@ async function continueCommand() {
     let nextResponse;
     if (!task) {
       nextResponse = await api.getNextTask();
-      task = nextResponse.data;
+      // API returns { data: { task, node } } or { data: task }
+      task = nextResponse.data?.task || nextResponse.data;
     }
 
     if (!task) {
@@ -294,8 +297,8 @@ async function continueCommand() {
       return;
     }
 
-    // Mark task as in progress if it's pending
-    if (task.status === 'pending') {
+    // Mark task as in progress if it's pending or assigned
+    if (task.status === 'pending' || task.status === 'assigned') {
       await api.startTask(task.id);
     }
 
