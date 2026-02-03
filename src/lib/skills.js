@@ -105,6 +105,7 @@ gbos add_task    # Create new task
 
 // Claude Code skill content
 const CLAUDE_CODE_SKILL = `---
+name: gbos
 description: Show GBOS status and available commands
 ---
 
@@ -136,25 +137,26 @@ When this skill is invoked, run the following steps:
 
 // Generate Claude Code skill file
 function generateClaudeCodeSkill(workingDirectory) {
-  const skillsDir = path.join(workingDirectory, '.claude', 'skills');
-  const skillFile = path.join(skillsDir, 'gbos.md');
+  // Skill must be a directory with SKILL.md inside (not just gbos.md)
+  const skillDir = path.join(workingDirectory, '.claude', 'skills', 'gbos');
+  const skillFile = path.join(skillDir, 'SKILL.md');
 
   try {
-    // Create .claude/skills directory if it doesn't exist
-    if (!fs.existsSync(skillsDir)) {
-      fs.mkdirSync(skillsDir, { recursive: true });
+    // Create .claude/skills/gbos directory if it doesn't exist
+    if (!fs.existsSync(skillDir)) {
+      fs.mkdirSync(skillDir, { recursive: true });
     }
 
     // Check if skill file already exists
     if (fs.existsSync(skillFile)) {
-      return { file: '.claude/skills/gbos.md', status: 'skipped', reason: 'Already exists' };
+      return { file: '.claude/skills/gbos/SKILL.md', status: 'skipped', reason: 'Already exists' };
     }
 
     // Write skill file
     fs.writeFileSync(skillFile, CLAUDE_CODE_SKILL, 'utf8');
-    return { file: '.claude/skills/gbos.md', status: 'created' };
+    return { file: '.claude/skills/gbos/SKILL.md', status: 'created' };
   } catch (e) {
-    return { file: '.claude/skills/gbos.md', status: 'error', reason: e.message };
+    return { file: '.claude/skills/gbos/SKILL.md', status: 'error', reason: e.message };
   }
 }
 
