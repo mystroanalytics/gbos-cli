@@ -7,6 +7,8 @@ const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
 const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand } = require('./commands/tasks');
+const { syncStartCommand, syncStopCommand, syncStatusCommand, syncNowCommand, repoCreateCommand, repoListCommand, repoCloneCommand } = require('./commands/gitlab');
+const { registryLoginCommand, registryImagesCommand, registryPushCommand, registryPullCommand } = require('./commands/registry');
 const config = require('./lib/config');
 const { displayStatus, printBanner } = require('./lib/display');
 
@@ -130,6 +132,101 @@ program
   .option('-a, --all', 'Clear all stored data including machine ID')
   .action(logoutCommand);
 
+// ==================== GitLab Commands ====================
+
+const gitlabCmd = program
+  .command('gitlab')
+  .description('GitLab integration commands');
+
+// GitLab Sync subcommands
+const gitlabSync = gitlabCmd
+  .command('sync')
+  .description('Auto-sync repository with GitLab');
+
+gitlabSync
+  .command('start')
+  .description('Start auto-syncing a repository')
+  .option('-p, --path <path>', 'Path to repository (defaults to current directory)')
+  .option('-i, --interval <seconds>', 'Sync interval in seconds (default: 60)', parseInt)
+  .action(syncStartCommand);
+
+gitlabSync
+  .command('stop')
+  .description('Stop auto-syncing a repository')
+  .option('-p, --path <path>', 'Path to repository (defaults to current directory)')
+  .option('-a, --all', 'Stop all active syncs')
+  .action(syncStopCommand);
+
+gitlabSync
+  .command('status')
+  .description('Show status of all active syncs')
+  .action(syncStatusCommand);
+
+gitlabSync
+  .command('now')
+  .description('Force an immediate sync')
+  .option('-p, --path <path>', 'Path to repository (defaults to current directory)')
+  .action(syncNowCommand);
+
+// GitLab Repo subcommands
+const gitlabRepo = gitlabCmd
+  .command('repo')
+  .description('GitLab repository management');
+
+gitlabRepo
+  .command('create <name>')
+  .description('Create a new GitLab repository')
+  .option('--private', 'Create as private repository (default)')
+  .option('--public', 'Create as public repository')
+  .option('-d, --description <description>', 'Repository description')
+  .option('--readme', 'Initialize with README')
+  .action(repoCreateCommand);
+
+gitlabRepo
+  .command('list')
+  .description('List GitLab repositories')
+  .option('-a, --all', 'Show all accessible repositories (not just owned)')
+  .action(repoListCommand);
+
+gitlabRepo
+  .command('clone <name>')
+  .description('Clone a GitLab repository')
+  .option('--ssh', 'Use SSH URL instead of HTTPS')
+  .option('-d, --dir <directory>', 'Target directory name')
+  .action(repoCloneCommand);
+
+// ==================== Registry Commands ====================
+
+const registryCmd = program
+  .command('registry')
+  .description('GitLab Container Registry commands');
+
+registryCmd
+  .command('login')
+  .description('Login to GitLab Container Registry')
+  .option('-r, --registry <url>', 'Registry URL (defaults to registry.gitlab.com)')
+  .action(registryLoginCommand);
+
+registryCmd
+  .command('images <project>')
+  .description('List container images in a project')
+  .option('-t, --tags', 'Show tags for each image')
+  .action(registryImagesCommand);
+
+registryCmd
+  .command('push <image>')
+  .description('Push an image to GitLab Container Registry')
+  .option('-p, --project <project>', 'GitLab project path (e.g., group/project)')
+  .option('-r, --registry <url>', 'Registry URL (defaults to registry.gitlab.com)')
+  .action(registryPushCommand);
+
+registryCmd
+  .command('pull <image>')
+  .description('Pull an image from GitLab Container Registry')
+  .option('-p, --project <project>', 'GitLab project path (e.g., group/project)')
+  .option('-r, --registry <url>', 'Registry URL (defaults to registry.gitlab.com)')
+  .action(registryPullCommand);
+
 program
   .command('help [command]')
   .description('Display help for a specific command')
@@ -140,7 +237,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, add_task, logout, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, fallback, add_task, logout, gitlab, registry, help');
       }
     } else {
       program.outputHelp();
