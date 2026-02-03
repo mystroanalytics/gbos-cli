@@ -569,22 +569,13 @@ function displayConnectBanner(data) {
   const highlight = TABLE_COLORS.yellow;
   const dim = DIM;
 
-  console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Connected!${RESET}\n`);
-  console.log(`  Run your favorite ${highlight}coding agent${RESET} in this CLI to start working.`);
-  console.log(`  Use ${cmd}/gbos${RESET} to list commands or simply ask your agent to run these commands.\n`);
+  console.log(`\n  ${fg(...LOGO_LIGHT)}✓${RESET} ${BOLD}Connected!${RESET}`);
+  console.log(`  ${dim}Use${RESET} ${cmd}gbos tasks${RESET} ${dim}or${RESET} ${cmd}gbos next${RESET} ${dim}to work on the next tasks.${RESET}`);
+  console.log(`  ${dim}Use${RESET} ${cmd}gbos start${RESET} ${dim}to automatically fetch and execute tasks in the queue.${RESET}`);
+  console.log(`  ${dim}For a full list of commands type${RESET} ${cmd}gbos -h${RESET}\n`);
 
-  console.log(`  ${dim}Available commands:${RESET}`);
-  console.log(`    ${cmd}auth${RESET} ${dim}[options]${RESET}      Authenticate with GBOS services`);
-  console.log(`    ${cmd}connect${RESET} ${dim}[options]${RESET}   Connect to a GBOS development node`);
-  console.log(`    ${cmd}disconnect${RESET}          Disconnect from the current GBOS node`);
-  console.log(`    ${cmd}status${RESET}              Show current authentication and connection status`);
-  console.log(`    ${cmd}tasks${RESET}               Show tasks assigned to this development node`);
-  console.log(`    ${cmd}next${RESET}                Get the next task in the queue`);
-  console.log(`    ${cmd}continue${RESET}            Continue working on current/next task`);
-  console.log(`    ${cmd}fallback${RESET}            Cancel current task and revert to last completed state`);
-  console.log(`    ${cmd}add_task${RESET}            Create a new task interactively`);
-  console.log(`    ${cmd}logout${RESET} ${dim}[options]${RESET}    Log out from GBOS services and clear credentials`);
-  console.log(`    ${cmd}help${RESET} ${dim}[command]${RESET}      Display help for a specific command\n`);
+  console.log(`  Run your favorite ${highlight}coding agent${RESET} in this CLI to start working.`);
+  console.log(`  ${dim}Simply ask your agent to run these commands.${RESET}\n`);
 
   console.log(`  ${dim}Supported Agents:${RESET} ${highlight}Claude${RESET}, ${highlight}Codex${RESET}, ${highlight}Gemini${RESET}, ${highlight}Cursor IDE${RESET}, ${highlight}AntiGravity IDE${RESET}, ${highlight}VS Code IDE${RESET}\n`);
 }
