@@ -32,7 +32,6 @@ Run these in the terminal:
 | \`gbos continue\` | Get the next task prompt to work on |
 | \`gbos next\` | Preview the next task in the queue |
 | \`gbos fallback\` | Cancel current task and revert changes |
-| \`gbos auto\` | Automatically process all tasks |
 | \`gbos add_task\` | Create a new task interactively |
 | \`gbos disconnect\` | Disconnect from the current node |
 
@@ -61,7 +60,6 @@ When user types "/gbos", run "gbos status" and show available commands.
 | gbos continue | Get next task |
 | gbos next | Preview next task |
 | gbos fallback | Cancel task |
-| gbos auto | Auto-process |
 | gbos add_task | Create task |
 
 ## Workflow
@@ -83,7 +81,6 @@ When user types "/gbos" or asks about GBOS, run "gbos status" and show available
 | gbos continue | Get next task prompt |
 | gbos next | Preview next task |
 | gbos fallback | Cancel current task |
-| gbos auto | Auto-process tasks |
 | gbos add_task | Create new task |
 
 ## Workflow
@@ -105,7 +102,6 @@ gbos tasks       # List assigned tasks
 gbos continue    # Get next task prompt
 gbos next        # Preview next task
 gbos fallback    # Cancel current task
-gbos auto        # Auto-process tasks
 gbos add_task    # Create new task
 \`\`\`
 
