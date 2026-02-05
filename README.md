@@ -155,6 +155,7 @@ Stored at `~/.gbos/session.json`:
 | Variable | Description |
 |----------|-------------|
 | `DEBUG=1` | Enable debug output |
+| `GBOS_API_URL` | Override API endpoint (default: `https://api.gbos.io/api/v1`) |
 
 ## API Endpoints
 
@@ -260,7 +261,7 @@ gbos auth --force
 ## Links
 
 - **GBOS Platform**: [https://gbos.io](https://gbos.io)
-- **API Documentation**: [https://REDACTED/docs](https://REDACTED/docs)
+- **API Documentation**: [https://api.gbos.io/docs](https://api.gbos.io/docs)
 - **Issues**: [https://github.com/mystroanalytics/gbos-node-local/issues](https://github.com/mystroanalytics/gbos-node-local/issues)
 
 ## License
