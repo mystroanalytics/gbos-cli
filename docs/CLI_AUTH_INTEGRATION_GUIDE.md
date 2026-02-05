@@ -54,7 +54,7 @@ The CLI authentication system allows developers to:
 
 ## API Endpoints Reference
 
-Base URL: `https://gbos-api-579767694933.us-south1.run.app/api/v1`
+Base URL: `https://api.gbos.io/api/v1`
 
 ### Authentication Endpoints
 
@@ -880,7 +880,7 @@ The MCP server should be configured with:
 
 ```json
 {
-  "gbos_api_url": "https://gbos-api-579767694933.us-south1.run.app/api/v1",
+  "gbos_api_url": "https://api.gbos.io/api/v1",
   "access_token": "gbos_xxxxx",
   "refresh_token": "gbos_refresh_xxxxx"
 }

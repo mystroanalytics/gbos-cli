@@ -1,6 +1,11 @@
 const config = require('./config');
 
-const API_BASE_URL = 'https://gbos-api-579767694933.us-south1.run.app/api/v1';
+// Default API endpoint (new domain)
+const DEFAULT_API_URL = 'https://api.gbos.io/api/v1';
+
+// Support GBOS_API_URL env var for backwards compatibility or custom endpoints
+// e.g., GBOS_API_URL=https://gbos-api-579767694933.us-south1.run.app/api/v1
+const API_BASE_URL = process.env.GBOS_API_URL || DEFAULT_API_URL;
 
 class GbosApiClient {
   constructor() {
