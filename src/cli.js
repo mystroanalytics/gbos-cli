@@ -9,6 +9,7 @@ const logoutCommand = require('./commands/logout');
 const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand, completedCommand } = require('./commands/tasks');
 const { syncStartCommand, syncStopCommand, syncStatusCommand, syncNowCommand, repoCreateCommand, repoListCommand, repoCloneCommand } = require('./commands/gitlab');
 const { registryLoginCommand, registryImagesCommand, registryPushCommand, registryPullCommand } = require('./commands/registry');
+const { startCommand, resumeCommand, stopCommand, runsCommand } = require('./commands/orchestrator');
 const config = require('./lib/config');
 const { displayStatus, printBanner } = require('./lib/display');
 
@@ -133,6 +134,40 @@ program
   .description('Create a new task interactively')
   .action(addTaskCommand);
 
+// ==================== Orchestrator Commands ====================
+
+program
+  .command('start')
+  .description('Start the GBOS orchestrator to automatically process tasks')
+  .option('-a, --agent <agent>', 'Agent to use (claude-code, codex, gemini)', 'claude-code')
+  .option('-d, --dir <directory>', 'Working directory')
+  .option('--auto-approve', 'Auto-approve agent actions')
+  .option('--no-mr', 'Skip merge request creation')
+  .option('-c, --continuous', 'Continuously process tasks')
+  .option('-n, --max-tasks <number>', 'Maximum tasks to process', '1')
+  .option('--show-prompt', 'Show the generated prompt')
+  .action(startCommand);
+
+program
+  .command('resume')
+  .description('Resume a paused orchestrator run')
+  .option('-r, --run-id <runId>', 'Specific run ID to resume')
+  .option('--no-mr', 'Skip merge request creation')
+  .action(resumeCommand);
+
+program
+  .command('stop')
+  .description('Stop an active orchestrator run')
+  .option('-r, --run-id <runId>', 'Specific run ID to stop')
+  .option('-f, --force', 'Force stop and mark as failed')
+  .action(stopCommand);
+
+program
+  .command('runs')
+  .description('List recent orchestrator runs')
+  .option('-l, --limit <number>', 'Number of runs to show', '10')
+  .action(runsCommand);
+
 program
   .command('logout')
   .description('Log out from GBOS services and clear credentials')
@@ -244,7 +279,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, logout, gitlab, registry, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, start, resume, stop, runs, logout, gitlab, registry, help');
       }
     } else {
       program.outputHelp();
