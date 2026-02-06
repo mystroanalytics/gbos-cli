@@ -1,6 +1,7 @@
 /**
  * Orchestrator Commands
  * CLI commands for start, resume, and stop
+ * Beautiful terminal output with real-time agent streaming
  */
 
 const config = require('../lib/config');
@@ -16,6 +17,27 @@ const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
 const CYAN = '\x1b[36m';
+
+// Spinner characters
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function createSpinner(text) {
+  let i = 0;
+  const interval = setInterval(() => {
+    process.stdout.write(`\r  ${CYAN}${SPINNER[i % SPINNER.length]}${RESET} ${text}`);
+    i++;
+  }, 80);
+  return {
+    stop: (finalText) => {
+      clearInterval(interval);
+      process.stdout.write(`\r  ${GREEN}✓${RESET} ${finalText || text}\n`);
+    },
+    fail: (finalText) => {
+      clearInterval(interval);
+      process.stdout.write(`\r  ${RED}✗${RESET} ${finalText || text}\n`);
+    },
+  };
+}
 
 /**
  * gbos start - Start the orchestrator
@@ -51,7 +73,6 @@ async function startCommand(options) {
   }
 
   // Check agent availability
-  console.log(`  ${DIM}Checking agent availability...${RESET}`);
   const adapters = await checkInstalledAdapters();
   const agentName = options.agent || 'claude-code';
   const agentInfo = adapters[agentName] || adapters['claude-code'];
@@ -69,28 +90,81 @@ async function startCommand(options) {
   // Create orchestrator
   const orchestrator = new Orchestrator({
     agent: agentName,
-    autoApprove: options.autoApprove || false,
+    autoApprove: options.autoApprove !== false,
     createMR: options.mr !== false,
     continuous: options.continuous || false,
     maxTasks: options.maxTasks ? parseInt(options.maxTasks) : 1,
     workingDir: options.dir ? path.resolve(options.dir) : null,
+    skipVerification: options.skipVerification || false,
+    skipGit: options.skipGit || false,
   });
+
+  // Track active spinner
+  let activeSpinner = null;
 
   // Set up event handlers
   orchestrator.on('started', ({ runId }) => {
-    console.log(`  ${GREEN}✓${RESET} Run started: ${runId}\n`);
+    console.log(`  ${GREEN}✓${RESET} Run started: ${DIM}${runId}${RESET}\n`);
   });
 
   orchestrator.on('stage', ({ stage }) => {
-    console.log(`  ${CYAN}▸${RESET} ${stage.replace(/_/g, ' ')}`);
+    // Stop any active spinner
+    if (activeSpinner) {
+      activeSpinner.stop();
+      activeSpinner = null;
+    }
+
+    const stageLabels = {
+      auth_config: 'Authenticating & configuring',
+      workspace_ready: 'Preparing workspace',
+      fetch_task: 'Fetching next task',
+      generate_prompt: 'Generating agent prompt',
+      run_agent: null, // handled by agent_start
+      post_process: 'Post-processing',
+      run_tests: 'Running tests',
+      commit_push: 'Committing & pushing',
+      report_status: 'Reporting status to GBOS',
+    };
+
+    const label = stageLabels[stage];
+    if (label) {
+      activeSpinner = createSpinner(label);
+    }
+  });
+
+  orchestrator.on('agent_start', ({ agent }) => {
+    if (activeSpinner) {
+      activeSpinner.stop();
+      activeSpinner = null;
+    }
+    console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+    console.log(`${BOLD}  Agent Output${RESET} ${DIM}(${agent})${RESET}`);
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+  });
+
+  orchestrator.on('agent_done', ({ exitCode }) => {
+    console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+    if (exitCode === 0) {
+      console.log(`  ${GREEN}✓${RESET} Agent completed successfully`);
+    } else {
+      console.log(`  ${YELLOW}!${RESET} Agent exited with code ${exitCode}`);
+    }
+    console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
   });
 
   orchestrator.on('log', ({ message }) => {
-    console.log(`    ${DIM}${message}${RESET}`);
+    // Only show important logs, not during spinner stages
+    if (!activeSpinner) {
+      // Don't print "Stage: X" logs since we handle those with spinners
+      if (!message.startsWith('Stage:')) {
+        console.log(`    ${DIM}${message}${RESET}`);
+      }
+    }
   });
 
   orchestrator.on('prompt', ({ prompt }) => {
     if (options.showPrompt) {
+      if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
       console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
       console.log(`${BOLD}  Task Prompt${RESET}`);
       console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
@@ -100,6 +174,7 @@ async function startCommand(options) {
   });
 
   orchestrator.on('committed', (result) => {
+    if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
     if (result.commit) {
       console.log(`    ${GREEN}✓${RESET} Committed: ${result.commit.shortHash}`);
     }
@@ -109,6 +184,7 @@ async function startCommand(options) {
   });
 
   orchestrator.on('completed', ({ tasksCompleted }) => {
+    if (activeSpinner) { activeSpinner.stop(); activeSpinner = null; }
     console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
     console.log(`${GREEN}✓${RESET} ${BOLD}Orchestrator completed${RESET}`);
     console.log(`  ${DIM}Tasks completed: ${tasksCompleted}${RESET}`);
@@ -116,12 +192,14 @@ async function startCommand(options) {
   });
 
   orchestrator.on('failed', ({ error }) => {
+    if (activeSpinner) { activeSpinner.fail(); activeSpinner = null; }
     console.log(`\n${RED}✗${RESET} ${BOLD}Orchestrator failed${RESET}`);
     console.log(`  ${DIM}Error: ${error.message}${RESET}\n`);
   });
 
   // Handle interrupts
   process.on('SIGINT', async () => {
+    if (activeSpinner) { activeSpinner.fail('Interrupted'); activeSpinner = null; }
     console.log(`\n\n  ${YELLOW}!${RESET} Stopping orchestrator...`);
     await orchestrator.stop();
     console.log(`  ${DIM}Run paused. Use "gbos resume" to continue.${RESET}\n`);
@@ -132,6 +210,7 @@ async function startCommand(options) {
   try {
     await orchestrator.start();
   } catch (error) {
+    if (activeSpinner) { activeSpinner.fail(); activeSpinner = null; }
     console.log(`\n${RED}✗${RESET} ${error.message}\n`);
     process.exit(1);
   }

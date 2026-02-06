@@ -9,7 +9,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const api = require('../../lib/api');
-const { getGitLabService, createGitLabService } = require('../../lib/gitlab');
 
 const execAsync = promisify(exec);
 
@@ -25,6 +24,7 @@ class WorkspaceManager {
     this.isReady = false;
     this.application = null;
     this.gitlabService = null;
+    this.hasRepo = false;
   }
 
   /**
@@ -64,22 +64,23 @@ class WorkspaceManager {
                        this.application?.deploy_url ||
                        this.application?.url;
 
-    if (!this.repoUrl) {
-      throw new Error('No repository URL configured for this application. Set gitlab_repo_url in the application settings.');
-    }
+    this.hasRepo = !!this.repoUrl;
 
-    // Initialize GitLab service for authenticated operations
-    try {
-      this.gitlabService = await getGitLabService();
-    } catch (e) {
-      // GitLab service not available, will use unauthenticated operations
-      this.gitlabService = null;
+    // Initialize GitLab service for authenticated operations (only if we have a repo)
+    if (this.hasRepo) {
+      try {
+        const { getGitLabService } = require('../../lib/gitlab');
+        this.gitlabService = await getGitLabService();
+      } catch (e) {
+        // GitLab service not available, will use unauthenticated operations
+        this.gitlabService = null;
+      }
     }
 
     // Determine working directory
     if (this.options.workingDir) {
       this.workingDir = this.options.workingDir;
-    } else {
+    } else if (this.hasRepo) {
       // Use current directory if it's a git repo with matching remote
       const currentDir = process.cwd();
       const isMatchingRepo = await this.isMatchingRepo(currentDir, this.repoUrl);
@@ -92,6 +93,9 @@ class WorkspaceManager {
         const repoName = this.extractRepoName(this.repoUrl);
         this.workingDir = path.join(WORKSPACES_DIR, repoName);
       }
+    } else {
+      // No repo URL - use current working directory
+      this.workingDir = process.cwd();
     }
 
     // Create task branch name
@@ -146,6 +150,16 @@ class WorkspaceManager {
    * Prepare the workspace
    */
   async prepare() {
+    if (this.hasRepo) {
+      return this.prepareWithRepo();
+    }
+    return this.prepareLocalOnly();
+  }
+
+  /**
+   * Prepare workspace with remote repository
+   */
+  async prepareWithRepo() {
     // Check if directory exists
     const dirExists = fs.existsSync(this.workingDir);
     const isRepo = dirExists && await this.isGitRepo();
@@ -168,6 +182,36 @@ class WorkspaceManager {
 
     // Clean working directory
     await this.cleanWorkingDir();
+
+    // Create and checkout branch
+    await this.checkoutBranch();
+
+    // Check for required tooling
+    await this.checkTooling();
+
+    this.isReady = true;
+    return this;
+  }
+
+  /**
+   * Prepare workspace without remote repo (local-only mode)
+   */
+  async prepareLocalOnly() {
+    // Ensure directory exists
+    if (!fs.existsSync(this.workingDir)) {
+      fs.mkdirSync(this.workingDir, { recursive: true });
+    }
+
+    // Initialize git if needed
+    const isRepo = await this.isGitRepo();
+    if (!isRepo) {
+      await execAsync('git init', { cwd: this.workingDir });
+      try {
+        await execAsync('git commit --allow-empty -m "Initial commit"', { cwd: this.workingDir });
+      } catch (e) {
+        // May fail if nothing to commit
+      }
+    }
 
     // Create and checkout branch
     await this.checkoutBranch();
@@ -324,11 +368,13 @@ class WorkspaceManager {
       }
     }
 
-    // Pull latest
-    try {
-      await execAsync('git pull origin HEAD --rebase', { cwd: this.workingDir });
-    } catch (e) {
-      // May fail if no remote tracking
+    // Pull latest (only if we have a remote)
+    if (this.hasRepo) {
+      try {
+        await execAsync('git pull origin HEAD --rebase', { cwd: this.workingDir });
+      } catch (e) {
+        // May fail if no remote tracking
+      }
     }
 
     // Check if branch exists
@@ -388,7 +434,7 @@ class WorkspaceManager {
       ...process.env,
       GBOS_WORKSPACE: this.workingDir,
       GBOS_BRANCH: this.branch,
-      GBOS_REPO: this.repoUrl,
+      GBOS_REPO: this.repoUrl || '',
       ...additionalVars,
     };
   }
@@ -433,6 +479,7 @@ class WorkspaceManager {
       repoUrl: this.repoUrl,
       cloudRunUrl: this.cloudRunUrl,
       branch: this.branch,
+      hasRepo: this.hasRepo,
       isReady: this.isReady,
       currentCommit: this.isReady ? await this.getCurrentCommit() : null,
       gitStatus: this.isReady ? await this.getGitStatus() : null,

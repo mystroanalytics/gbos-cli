@@ -18,10 +18,12 @@ class Orchestrator extends EventEmitter {
     super();
     this.options = {
       agent: options.agent || 'claude-code',
-      autoApprove: options.autoApprove || false,
+      autoApprove: options.autoApprove !== false, // Default true for orchestrator
       createMR: options.createMR !== false,
       continuous: options.continuous || false,
       maxTasks: options.maxTasks || 1,
+      skipVerification: options.skipVerification || false,
+      skipGit: options.skipGit || false,
       ...options,
     };
 
@@ -61,7 +63,9 @@ class Orchestrator extends EventEmitter {
       await this.runWorkflow();
     } catch (error) {
       this.stateMachine.recordError(error);
-      this.stateMachine.transition(STATES.FAILED, { error: error.message });
+      if (this.stateMachine.canTransition(STATES.FAILED)) {
+        this.stateMachine.transition(STATES.FAILED, { error: error.message });
+      }
       this.emit('failed', { error });
       throw error;
     } finally {
@@ -101,7 +105,9 @@ class Orchestrator extends EventEmitter {
       await this.runWorkflow();
     } catch (error) {
       this.stateMachine.recordError(error);
-      this.stateMachine.transition(STATES.FAILED, { error: error.message });
+      if (this.stateMachine.canTransition(STATES.FAILED)) {
+        this.stateMachine.transition(STATES.FAILED, { error: error.message });
+      }
       this.emit('failed', { error });
       throw error;
     } finally {
@@ -121,7 +127,9 @@ class Orchestrator extends EventEmitter {
     }
 
     if (this.stateMachine && this.stateMachine.state !== STATES.COMPLETED) {
-      this.stateMachine.transition(STATES.PAUSED);
+      if (this.stateMachine.canTransition(STATES.PAUSED)) {
+        this.stateMachine.transition(STATES.PAUSED);
+      }
     }
 
     this.isRunning = false;
@@ -157,9 +165,18 @@ class Orchestrator extends EventEmitter {
 
           await this.stageGeneratePrompt();
           await this.stageRunAgent();
-          await this.stagePostProcess();
-          await this.stageRunTests();
-          await this.stageCommitPush();
+
+          // Conditionally run verification stages
+          if (!this.options.skipVerification) {
+            await this.stagePostProcess();
+            await this.stageRunTests();
+          }
+
+          // Conditionally run git stages
+          if (!this.options.skipGit) {
+            await this.stageCommitPush();
+          }
+
           await this.stageReportStatus();
 
           this.tasksCompleted++;
@@ -176,22 +193,30 @@ class Orchestrator extends EventEmitter {
       case STATES.RUN_AGENT:
       case STATES.PAUSED:
         await this.stageRunAgent();
-        await this.stagePostProcess();
-        await this.stageRunTests();
-        await this.stageCommitPush();
+        if (!this.options.skipVerification) {
+          await this.stagePostProcess();
+          await this.stageRunTests();
+        }
+        if (!this.options.skipGit) {
+          await this.stageCommitPush();
+        }
         await this.stageReportStatus();
         break;
 
       case STATES.POST_PROCESS:
         await this.stagePostProcess();
         await this.stageRunTests();
-        await this.stageCommitPush();
+        if (!this.options.skipGit) {
+          await this.stageCommitPush();
+        }
         await this.stageReportStatus();
         break;
 
       case STATES.RUN_TESTS:
         await this.stageRunTests();
-        await this.stageCommitPush();
+        if (!this.options.skipGit) {
+          await this.stageCommitPush();
+        }
         await this.stageReportStatus();
         break;
 
@@ -289,7 +314,10 @@ class Orchestrator extends EventEmitter {
     // Save cloud run URL for later use
     this.stateMachine.context.cloudRunUrl = cloudRunUrl;
 
-    this.log(`Repo URL: ${this.workspace.repoUrl}`);
+    this.log(`Working dir: ${this.workspace.workingDir}`);
+    if (this.workspace.repoUrl) {
+      this.log(`Repo URL: ${this.workspace.repoUrl}`);
+    }
     if (cloudRunUrl) {
       this.log(`Cloud Run URL: ${cloudRunUrl}`);
     }
@@ -367,6 +395,7 @@ class Orchestrator extends EventEmitter {
   async stageRunAgent() {
     this.log('Stage: Run Agent');
     this.emit('stage', { stage: 'run_agent' });
+    this.emit('agent_start', { agent: this.adapter.name });
 
     const prompt = this.stateMachine.context.outputs?.prompt?.output ||
                    this.stateMachine.context.prompt;
@@ -386,6 +415,7 @@ class Orchestrator extends EventEmitter {
       cwd: this.workspace.workingDir,
       env: this.workspace.getEnvironment(cmdConfig.env),
       timeout: 30 * 60 * 1000, // 30 minutes
+      closeStdinOnWrite: cmdConfig.closeStdinOnWrite || false,
     });
 
     // Set up event handlers
@@ -414,6 +444,7 @@ class Orchestrator extends EventEmitter {
       }
 
       this.stateMachine.transition(STATES.RUN_AGENT);
+      this.emit('agent_done', { exitCode: result.exitCode });
 
     } catch (error) {
       this.stateMachine.recordError(error, 'run_agent');
@@ -478,10 +509,13 @@ class Orchestrator extends EventEmitter {
     const message = `Complete task: ${this.currentTask.title || this.currentTask.task_key || this.currentTask.id}`;
 
     let result;
-    if (this.options.createMR) {
+    if (this.workspace.hasRepo && this.options.createMR) {
       result = await this.git.commitPushAndMR(message, this.currentTask);
-    } else {
+    } else if (this.workspace.hasRepo) {
       result = await this.git.commitAndPush(message, this.currentTask);
+    } else {
+      // Local-only: just commit, no push
+      result = await this.git.commitOnly(message);
     }
 
     this.stateMachine.recordOutput('git', result);
