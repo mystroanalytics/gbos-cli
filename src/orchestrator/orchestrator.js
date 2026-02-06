@@ -98,6 +98,9 @@ class Orchestrator extends EventEmitter {
     this.isRunning = true;
     this.isPaused = false;
 
+    // Restore critical state from saved context and connection
+    await this.restoreState();
+
     this.emit('resumed', { runId: this.stateMachine.runId, state: this.stateMachine.state });
     this.log('Orchestrator resumed', { runId: this.stateMachine.runId, state: this.stateMachine.state });
 
@@ -134,6 +137,53 @@ class Orchestrator extends EventEmitter {
 
     this.isRunning = false;
     this.emit('stopped', { runId: this.stateMachine?.runId });
+  }
+
+  /**
+   * Restore critical state (application, adapter) when resuming a run
+   */
+  async restoreState() {
+    // Restore application from saved context or connection
+    const connection = config.getConnection();
+    const appId = this.stateMachine.context.appId || connection?.application?.id;
+
+    if (appId) {
+      try {
+        const response = await api.getConnectionStatus();
+        this.application = response.data?.application || connection?.application;
+      } catch (e) {
+        this.application = connection?.application;
+      }
+
+      // If still no application, fetch directly
+      if (!this.application && appId) {
+        try {
+          const response = await api.getApplication(appId);
+          this.application = response.data || response;
+        } catch (e) {
+          this.application = connection?.application || { id: appId };
+        }
+      }
+    } else {
+      this.application = connection?.application;
+    }
+
+    // Restore adapter
+    const agentVendor = this.stateMachine.context.agentVendor || this.options.agent;
+    this.adapter = getAdapter(agentVendor);
+
+    // Restore task if saved
+    if (this.stateMachine.context.taskId && !this.currentTask) {
+      try {
+        const response = await api.request(`/development-tasks/${this.stateMachine.context.taskId}`, { method: 'GET' });
+        this.currentTask = response.data;
+      } catch (e) {
+        // Task may no longer exist
+      }
+    }
+
+    // Start status updates
+    this.startStatusUpdates();
   }
 
   /**
