@@ -80,6 +80,7 @@ class WorkspaceManager {
 
     // Determine working directory
     if (this.options.workingDir) {
+      // Explicit working directory provided (pre-validated by startCommand)
       this.workingDir = this.options.workingDir;
     } else if (this.hasRepo) {
       // Use current directory if it's a git repo with matching remote
@@ -89,7 +90,7 @@ class WorkspaceManager {
       if (isMatchingRepo) {
         this.workingDir = currentDir;
       } else {
-        // Clone to workspaces directory
+        // Fall back to workspaces directory
         WorkspaceManager.ensureWorkspacesDir();
         const repoName = this.extractRepoName(this.repoUrl);
         this.workingDir = path.join(WORKSPACES_DIR, repoName);

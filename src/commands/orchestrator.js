@@ -5,12 +5,17 @@
  */
 
 const config = require('../lib/config');
+const api = require('../lib/api');
 const { displayMessageBox, fg, LOGO_PURPLE, RESET, BOLD, DIM, getTerminalWidth } = require('../lib/display');
 const Orchestrator = require('../orchestrator/orchestrator');
 const { StateMachine, STATES, RUNS_DIR } = require('../orchestrator/state-machine');
 const { checkInstalledAdapters } = require('../orchestrator/adapters');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 // Colors
 const GREEN = '\x1b[32m';
@@ -37,6 +42,113 @@ function createSpinner(text) {
       process.stdout.write(`\r  ${RED}✗${RESET} ${finalText || text}\n`);
     },
   };
+}
+
+/**
+ * Prompt user for yes/no confirmation
+ */
+function promptConfirm(question) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(`  ${CYAN}?${RESET} ${question} ${DIM}(y/N)${RESET}: `, (answer) => {
+      rl.close();
+      const lower = answer.trim().toLowerCase();
+      resolve(lower === 'y' || lower === 'yes');
+    });
+  });
+}
+
+/**
+ * Check if directory is a git repo with a matching remote
+ */
+async function isMatchingGitRepo(dir, repoUrl) {
+  try {
+    const { stdout } = await execAsync('git remote get-url origin', { cwd: dir });
+    const currentUrl = stdout.trim();
+    const normalize = (url) => url
+      .replace(/\.git$/, '')
+      .replace(/^git@([^:]+):/, 'https://$1/')
+      .replace(/^https?:\/\//, '')
+      .toLowerCase();
+    return normalize(currentUrl) === normalize(repoUrl);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Check if a directory is empty (ignoring hidden files like .DS_Store)
+ */
+function isDirEmpty(dir) {
+  if (!fs.existsSync(dir)) return true;
+  const entries = fs.readdirSync(dir).filter(f => f !== '.DS_Store');
+  return entries.length === 0;
+}
+
+/**
+ * Pre-check workspace: ensure CWD is the app's repo or offer to initialize
+ * Returns the working directory to use, or null to abort
+ */
+async function preCheckWorkspace(connection) {
+  const currentDir = process.cwd();
+
+  // Get application details to find the repo URL
+  let app = connection.application;
+  if (app?.id) {
+    try {
+      const response = await api.getApplication(app.id);
+      app = response.data || response;
+    } catch (e) {
+      // Use connection's app data
+    }
+  }
+
+  const repoUrl = app?.gitlab_repo_url || app?.repo_url || app?.repository_url;
+
+  // If no repo URL configured, use CWD as local-only workspace
+  if (!repoUrl) {
+    console.log(`  ${DIM}No repository configured - using local workspace${RESET}`);
+    return currentDir;
+  }
+
+  // Check if CWD is already the matching repo
+  const isMatching = await isMatchingGitRepo(currentDir, repoUrl);
+  if (isMatching) {
+    console.log(`  ${GREEN}✓${RESET} Current directory matches app repository`);
+    return currentDir;
+  }
+
+  // CWD doesn't match - check if it's empty
+  const empty = isDirEmpty(currentDir);
+
+  if (!empty) {
+    // Directory is not empty and not the repo
+    console.log(`  ${RED}✗${RESET} Current directory is not the app's GitLab repository`);
+    console.log(`    ${DIM}Expected repo: ${repoUrl}${RESET}`);
+    console.log(`    ${DIM}Current dir: ${currentDir}${RESET}\n`);
+    console.log(`  ${YELLOW}!${RESET} To use this directory, it must either be:`);
+    console.log(`    1. The root of the GitLab repository (clone it first)`);
+    console.log(`    2. An empty folder (GBOS will initialize the repo for you)\n`);
+    return null;
+  }
+
+  // Directory is empty - offer to initialize
+  console.log(`  ${YELLOW}!${RESET} Current directory is empty and not a git repository`);
+  console.log(`    ${DIM}App repo: ${repoUrl}${RESET}`);
+  console.log(`    ${DIM}Current dir: ${currentDir}${RESET}\n`);
+
+  const confirmed = await promptConfirm(`Initialize GitLab repository for "${app.name || 'this app'}" in this directory?`);
+
+  if (!confirmed) {
+    console.log(`\n  ${DIM}Aborted. Navigate to the correct repo directory or use an empty folder.${RESET}\n`);
+    return null;
+  }
+
+  console.log('');
+  return currentDir;
 }
 
 /**
@@ -72,6 +184,15 @@ async function startCommand(options) {
     return;
   }
 
+  // Pre-check workspace (unless --dir is explicitly provided)
+  let workingDir = options.dir ? path.resolve(options.dir) : null;
+  if (!workingDir) {
+    workingDir = await preCheckWorkspace(connection);
+    if (workingDir === null) {
+      process.exit(1);
+    }
+  }
+
   // Check agent availability
   const adapters = await checkInstalledAdapters();
   const agentName = options.agent || 'claude-code';
@@ -94,7 +215,7 @@ async function startCommand(options) {
     createMR: options.mr !== false,
     continuous: options.continuous || false,
     maxTasks: options.maxTasks ? parseInt(options.maxTasks) : 1,
-    workingDir: options.dir ? path.resolve(options.dir) : null,
+    workingDir: workingDir,
     skipVerification: options.skipVerification || false,
     skipGit: options.skipGit || false,
     taskId: options.taskId || null,
