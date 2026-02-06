@@ -18,6 +18,7 @@ class WorkspaceManager {
   constructor(options = {}) {
     this.options = options;
     this.workingDir = null;
+    this.codebaseDir = null; // Agent works here (workingDir/codebase)
     this.repoUrl = null;
     this.cloudRunUrl = null;
     this.branch = null;
@@ -97,6 +98,9 @@ class WorkspaceManager {
       // No repo URL - use current working directory
       this.workingDir = process.cwd();
     }
+
+    // Set codebase directory (agent works here, git operations at workingDir)
+    this.codebaseDir = path.join(this.workingDir, 'codebase');
 
     // Create task branch name
     this.branch = this.options.branch ||
@@ -189,6 +193,9 @@ class WorkspaceManager {
     // Check for required tooling
     await this.checkTooling();
 
+    // Ensure codebase directory exists
+    await this.ensureCodebaseDir();
+
     this.isReady = true;
     return this;
   }
@@ -218,6 +225,9 @@ class WorkspaceManager {
 
     // Check for required tooling
     await this.checkTooling();
+
+    // Ensure codebase directory exists
+    await this.ensureCodebaseDir();
 
     this.isReady = true;
     return this;
@@ -414,16 +424,35 @@ class WorkspaceManager {
       }
     }
 
-    // Check for package.json and install dependencies
-    const packageJson = path.join(this.workingDir, 'package.json');
-    if (fs.existsSync(packageJson)) {
-      const nodeModules = path.join(this.workingDir, 'node_modules');
-      if (!fs.existsSync(nodeModules)) {
-        await execAsync('npm install', { cwd: this.workingDir });
+    // Check for package.json and install dependencies (check both root and codebase)
+    for (const dir of [this.workingDir, this.codebaseDir]) {
+      if (!dir) continue;
+      const packageJson = path.join(dir, 'package.json');
+      if (fs.existsSync(packageJson)) {
+        const nodeModules = path.join(dir, 'node_modules');
+        if (!fs.existsSync(nodeModules)) {
+          await execAsync('npm install', { cwd: dir });
+        }
       }
     }
 
     return results;
+  }
+
+  /**
+   * Ensure the codebase directory exists inside the workspace
+   */
+  async ensureCodebaseDir() {
+    if (!fs.existsSync(this.codebaseDir)) {
+      fs.mkdirSync(this.codebaseDir, { recursive: true });
+    }
+  }
+
+  /**
+   * Get the codebase directory (where the agent should work)
+   */
+  getCodebaseDir() {
+    return this.codebaseDir;
   }
 
   /**
@@ -433,6 +462,7 @@ class WorkspaceManager {
     return {
       ...process.env,
       GBOS_WORKSPACE: this.workingDir,
+      GBOS_CODEBASE: this.codebaseDir,
       GBOS_BRANCH: this.branch,
       GBOS_REPO: this.repoUrl || '',
       ...additionalVars,

@@ -418,9 +418,9 @@ class Orchestrator extends EventEmitter {
       autoApprove: this.options.autoApprove,
     });
 
-    // Create session runner
+    // Create session runner - agent works in codebase/ subdirectory
     this.session = new SessionRunner({
-      cwd: this.workspace.workingDir,
+      cwd: this.workspace.getCodebaseDir(),
       env: this.workspace.getEnvironment(cmdConfig.env),
       timeout: 30 * 60 * 1000, // 30 minutes
       closeStdinOnWrite: cmdConfig.closeStdinOnWrite || false,

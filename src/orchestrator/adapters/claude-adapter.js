@@ -79,6 +79,8 @@ class ClaudeAdapter extends BaseAdapter {
       lines.push('3. Verify all tests pass before completing');
     }
     lines.push('');
+    lines.push('## Workspace', '', 'You are working inside the `codebase/` directory of the repository. All files you create or modify should be in this directory (your current working directory). Do NOT create files outside of this directory.', '');
+
     lines.push('## Completion', '', 'When you have completed the task:', '1. Ensure all tests pass', '2. Review your changes for quality', '3. The system will automatically commit and push your changes', '', '**Important:** Do not run `git commit` or `git push` yourself - the GBOS orchestrator will handle this.', '');
 
     if (context.repoUrl) {
