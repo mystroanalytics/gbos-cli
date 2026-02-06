@@ -1,6 +1,6 @@
 {
   "name": "gbos",
-  "version": "1.4.12",
+  "version": "1.4.13",
   "description": "GBOS - Command line interface for GBOS services",
   "main": "src/index.js",
   "bin": {
