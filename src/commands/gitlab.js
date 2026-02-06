@@ -38,14 +38,25 @@ function saveGitLabConfig(config) {
 
 // Get GitLab URL from session or config
 function getGitLabUrl() {
+  // Check config file first
+  try {
+    if (fs.existsSync(GITLAB_CONFIG_FILE)) {
+      const gitlabConfig = JSON.parse(fs.readFileSync(GITLAB_CONFIG_FILE, 'utf8'));
+      if (gitlabConfig.host) return gitlabConfig.host;
+    }
+  } catch (e) {
+    // Ignore
+  }
+
   const session = config.loadSession();
-  return session?.gitlab_url || process.env.GITLAB_URL || 'https://gitlab.com';
+  return session?.gitlab_url || process.env.GITLAB_URL || 'https://git.gbos.io';
 }
 
-// Get GitLab token
-function getGitLabToken() {
-  const session = config.loadSession();
-  return session?.gitlab_token || process.env.GITLAB_TOKEN || null;
+// Get GitLab token (checks all storage locations)
+async function getGitLabToken() {
+  const { createGitLabService } = require('../lib/gitlab');
+  const gitlabService = createGitLabService();
+  return await gitlabService.getToken();
 }
 
 // Execute git command
@@ -291,7 +302,7 @@ async function syncNowCommand(options) {
 
 // Create a new repository
 async function repoCreateCommand(name, options) {
-  const token = getGitLabToken();
+  const token = await getGitLabToken();
   const gitlabUrl = getGitLabUrl();
 
   if (!token) {
@@ -354,7 +365,7 @@ async function repoCreateCommand(name, options) {
 
 // List repositories
 async function repoListCommand(options) {
-  const token = getGitLabToken();
+  const token = await getGitLabToken();
   const gitlabUrl = getGitLabUrl();
 
   if (!token) {
@@ -410,7 +421,7 @@ async function repoListCommand(options) {
 
 // Clone a repository
 async function repoCloneCommand(name, options) {
-  const token = getGitLabToken();
+  const token = await getGitLabToken();
   const gitlabUrl = getGitLabUrl();
 
   if (!token) {
@@ -459,6 +470,137 @@ async function repoCloneCommand(name, options) {
   }
 }
 
+// ==================== AUTH COMMANDS ====================
+
+// Authenticate with GitLab
+async function authCommand(options) {
+  const { createGitLabService, GITLAB_HOST } = require('../lib/gitlab');
+  const readline = require('readline');
+
+  const termWidth = getTerminalWidth();
+  const tableWidth = Math.min(80, termWidth - 4);
+
+  console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+  console.log(`${BOLD}  GitLab Authentication${RESET}`);
+  console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+
+  let token = options.token;
+  const host = options.host || GITLAB_HOST;
+
+  // Interactive prompt if no token provided
+  if (!token) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    console.log(`  ${DIM}GitLab Host: ${host}${RESET}`);
+    console.log(`  ${DIM}Create a Personal Access Token with scopes:${RESET}`);
+    console.log(`    ${DIM}- api${RESET}`);
+    console.log(`    ${DIM}- read_repository${RESET}`);
+    console.log(`    ${DIM}- write_repository${RESET}`);
+    console.log(`    ${DIM}- read_registry${RESET}`);
+    console.log(`    ${DIM}- write_registry${RESET}\n`);
+
+    token = await new Promise((resolve) => {
+      rl.question(`  ${CYAN}?${RESET} Enter GitLab Personal Access Token: `, (answer) => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    });
+
+    if (!token) {
+      console.log(`\n  ${YELLOW}!${RESET} No token provided. Cancelled.\n`);
+      return;
+    }
+  }
+
+  console.log(`\n  ${DIM}Validating token...${RESET}`);
+
+  const gitlabService = createGitLabService({ host });
+
+  try {
+    const user = await gitlabService.storeToken(token);
+
+    console.log(`\n${GREEN}✓${RESET} ${BOLD}GitLab authentication successful${RESET}`);
+    console.log(`  ${DIM}User:${RESET} ${user.username} (${user.name || user.email})`);
+    console.log(`  ${DIM}Host:${RESET} ${host}`);
+    console.log(`  ${GREEN}✓${RESET} Token stored securely`);
+    console.log(`  ${GREEN}✓${RESET} Git credentials configured\n`);
+
+    console.log(`  ${DIM}You can now use:${RESET}`);
+    console.log(`    ${DIM}- gbos gitlab repo create <name>${RESET}`);
+    console.log(`    ${DIM}- gbos gitlab repo clone <name>${RESET}`);
+    console.log(`    ${DIM}- gbos start (orchestrator with GitLab integration)${RESET}\n`);
+
+  } catch (error) {
+    console.log(`\n${RED}✗${RESET} ${BOLD}Authentication failed${RESET}`);
+    console.log(`  ${DIM}${error.message}${RESET}\n`);
+    process.exit(1);
+  }
+}
+
+// Show GitLab auth status
+async function authStatusCommand() {
+  const { createGitLabService, GITLAB_HOST, GITLAB_CONFIG_FILE } = require('../lib/gitlab');
+
+  const termWidth = getTerminalWidth();
+  const tableWidth = Math.min(80, termWidth - 4);
+
+  console.log(`\n${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}`);
+  console.log(`${BOLD}  GitLab Authentication Status${RESET}`);
+  console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
+
+  const gitlabService = createGitLabService();
+
+  try {
+    const token = await gitlabService.getToken();
+
+    if (!token) {
+      console.log(`  ${YELLOW}!${RESET} Not authenticated with GitLab`);
+      console.log(`  ${DIM}Run: gbos gitlab auth --token <your-token>${RESET}\n`);
+      return;
+    }
+
+    // Validate token
+    gitlabService.token = token;
+    const user = await gitlabService.getCurrentUser();
+
+    console.log(`  ${GREEN}●${RESET} ${BOLD}Authenticated${RESET}`);
+    console.log(`  ${DIM}User:${RESET}  ${user.username}`);
+    console.log(`  ${DIM}Name:${RESET}  ${user.name || 'N/A'}`);
+    console.log(`  ${DIM}Email:${RESET} ${user.email || 'N/A'}`);
+    console.log(`  ${DIM}Host:${RESET}  ${GITLAB_HOST}\n`);
+
+    // Check if config file exists
+    if (fs.existsSync(GITLAB_CONFIG_FILE)) {
+      const gitlabConfig = JSON.parse(fs.readFileSync(GITLAB_CONFIG_FILE, 'utf8'));
+      if (gitlabConfig.storedAt) {
+        console.log(`  ${DIM}Stored: ${new Date(gitlabConfig.storedAt).toLocaleString()}${RESET}\n`);
+      }
+    }
+
+  } catch (error) {
+    console.log(`  ${RED}●${RESET} ${BOLD}Invalid or expired token${RESET}`);
+    console.log(`  ${DIM}Error: ${error.message}${RESET}`);
+    console.log(`  ${DIM}Run: gbos gitlab auth --token <new-token>${RESET}\n`);
+  }
+}
+
+// Logout from GitLab
+async function authLogoutCommand() {
+  const { createGitLabService } = require('../lib/gitlab');
+
+  const gitlabService = createGitLabService();
+
+  try {
+    await gitlabService.deleteToken();
+    console.log(`\n${GREEN}✓${RESET} GitLab credentials removed.\n`);
+  } catch (error) {
+    console.log(`\n${YELLOW}!${RESET} ${error.message}\n`);
+  }
+}
+
 module.exports = {
   syncStartCommand,
   syncStopCommand,
@@ -467,4 +609,7 @@ module.exports = {
   repoCreateCommand,
   repoListCommand,
   repoCloneCommand,
+  authCommand,
+  authStatusCommand,
+  authLogoutCommand,
 };

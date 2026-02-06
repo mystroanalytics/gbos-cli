@@ -91,6 +91,10 @@ class GbosApiClient {
     return this.request('/cli/applications', { method: 'GET' });
   }
 
+  async getApplication(applicationId) {
+    return this.request(`/cli/applications/${applicationId}`, { method: 'GET' });
+  }
+
   // Node endpoints
   async listNodes(applicationId = null) {
     let endpoint = '/cli/nodes';

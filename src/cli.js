@@ -7,7 +7,7 @@ const authCommand = require('./commands/auth');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
 const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand, completedCommand } = require('./commands/tasks');
-const { syncStartCommand, syncStopCommand, syncStatusCommand, syncNowCommand, repoCreateCommand, repoListCommand, repoCloneCommand } = require('./commands/gitlab');
+const { syncStartCommand, syncStopCommand, syncStatusCommand, syncNowCommand, repoCreateCommand, repoListCommand, repoCloneCommand, authCommand: gitlabAuthCommand, authStatusCommand: gitlabAuthStatusCommand, authLogoutCommand: gitlabAuthLogoutCommand } = require('./commands/gitlab');
 const { registryLoginCommand, registryImagesCommand, registryPushCommand, registryPullCommand } = require('./commands/registry');
 const { startCommand, resumeCommand, stopCommand, runsCommand } = require('./commands/orchestrator');
 const config = require('./lib/config');
@@ -236,6 +236,24 @@ gitlabRepo
   .option('--ssh', 'Use SSH URL instead of HTTPS')
   .option('-d, --dir <directory>', 'Target directory name')
   .action(repoCloneCommand);
+
+// GitLab Auth subcommands
+gitlabCmd
+  .command('auth')
+  .description('Authenticate with GitLab (store token securely)')
+  .option('-t, --token <token>', 'GitLab Personal Access Token')
+  .option('-h, --host <host>', 'GitLab host (default: https://git.gbos.io)')
+  .action(gitlabAuthCommand);
+
+gitlabCmd
+  .command('auth-status')
+  .description('Show GitLab authentication status')
+  .action(gitlabAuthStatusCommand);
+
+gitlabCmd
+  .command('auth-logout')
+  .description('Remove GitLab credentials')
+  .action(gitlabAuthLogoutCommand);
 
 // ==================== Registry Commands ====================
 

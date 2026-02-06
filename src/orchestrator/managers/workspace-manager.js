@@ -8,6 +8,8 @@ const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const api = require('../../lib/api');
+const { getGitLabService, createGitLabService } = require('../../lib/gitlab');
 
 const execAsync = promisify(exec);
 
@@ -18,8 +20,11 @@ class WorkspaceManager {
     this.options = options;
     this.workingDir = null;
     this.repoUrl = null;
+    this.cloudRunUrl = null;
     this.branch = null;
     this.isReady = false;
+    this.application = null;
+    this.gitlabService = null;
   }
 
   /**
@@ -33,15 +38,42 @@ class WorkspaceManager {
 
   /**
    * Initialize workspace from application config
-   * @param {Object} app - Application object from GBOS API
+   * @param {Object} app - Application object from GBOS API (can be partial)
    * @param {Object} task - Task object
    */
   async initialize(app, task) {
-    // Get repo URL from application
-    this.repoUrl = app.gitlab_repo_url || app.repo_url || app.repository_url;
+    // Fetch full application details from GBOS API if we have an ID
+    if (app?.id) {
+      try {
+        const response = await api.getApplication(app.id);
+        this.application = response.data || response;
+      } catch (e) {
+        // Fall back to provided app object
+        this.application = app;
+      }
+    } else {
+      this.application = app;
+    }
+
+    // Get repo URL and cloud run URL from application
+    this.repoUrl = this.application?.gitlab_repo_url ||
+                   this.application?.repo_url ||
+                   this.application?.repository_url;
+
+    this.cloudRunUrl = this.application?.cloud_run_url ||
+                       this.application?.deploy_url ||
+                       this.application?.url;
 
     if (!this.repoUrl) {
-      throw new Error('No repository URL configured for this application');
+      throw new Error('No repository URL configured for this application. Set gitlab_repo_url in the application settings.');
+    }
+
+    // Initialize GitLab service for authenticated operations
+    try {
+      this.gitlabService = await getGitLabService();
+    } catch (e) {
+      // GitLab service not available, will use unauthenticated operations
+      this.gitlabService = null;
     }
 
     // Determine working directory
@@ -114,12 +146,19 @@ class WorkspaceManager {
    * Prepare the workspace
    */
   async prepare() {
-    // Clone if needed
-    if (!fs.existsSync(this.workingDir)) {
+    // Check if directory exists
+    const dirExists = fs.existsSync(this.workingDir);
+    const isRepo = dirExists && await this.isGitRepo();
+
+    if (!dirExists) {
+      // Clone the repository
       await this.cloneRepo();
+    } else if (!isRepo) {
+      // Directory exists but is not a git repo - initialize it
+      await this.initializeRepo();
     }
 
-    // Ensure it's a git repo
+    // Ensure it's a git repo now
     if (!await this.isGitRepo()) {
       throw new Error(`${this.workingDir} is not a git repository`);
     }
@@ -141,7 +180,7 @@ class WorkspaceManager {
   }
 
   /**
-   * Clone the repository
+   * Clone the repository using GitLab authentication
    */
   async cloneRepo() {
     const parentDir = path.dirname(this.workingDir);
@@ -149,7 +188,83 @@ class WorkspaceManager {
       fs.mkdirSync(parentDir, { recursive: true });
     }
 
-    await execAsync(`git clone ${this.repoUrl} ${this.workingDir}`);
+    // Use GitLab service for authenticated clone if available
+    if (this.gitlabService) {
+      try {
+        await this.gitlabService.cloneRepo(this.repoUrl, this.workingDir);
+        return;
+      } catch (e) {
+        // Fall back to direct clone
+      }
+    }
+
+    // Direct clone (relies on git credentials being set up)
+    await execAsync(`git clone "${this.repoUrl}" "${this.workingDir}"`);
+  }
+
+  /**
+   * Initialize a new git repo and connect to GitLab
+   */
+  async initializeRepo() {
+    // Create directory if needed
+    if (!fs.existsSync(this.workingDir)) {
+      fs.mkdirSync(this.workingDir, { recursive: true });
+    }
+
+    // Initialize git
+    await execAsync('git init', { cwd: this.workingDir });
+
+    // If we have GitLab service, set up the remote
+    if (this.gitlabService) {
+      const projectPath = this.gitlabService.extractProjectPath(this.repoUrl);
+      if (projectPath) {
+        const remoteUrl = this.gitlabService.getPublicCloneUrl(projectPath);
+        try {
+          await execAsync(`git remote add origin "${remoteUrl}"`, { cwd: this.workingDir });
+        } catch (e) {
+          // Remote may already exist
+          try {
+            await execAsync(`git remote set-url origin "${remoteUrl}"`, { cwd: this.workingDir });
+          } catch (e2) {
+            // Ignore
+          }
+        }
+      }
+    } else {
+      // Use the repo URL directly
+      try {
+        await execAsync(`git remote add origin "${this.repoUrl}"`, { cwd: this.workingDir });
+      } catch (e) {
+        // Remote may already exist
+      }
+    }
+
+    // Create initial commit if needed
+    try {
+      await execAsync('git rev-parse HEAD', { cwd: this.workingDir });
+    } catch (e) {
+      // No commits yet - create initial commit
+      await execAsync('git add -A', { cwd: this.workingDir });
+      try {
+        await execAsync('git commit -m "Initial commit from GBOS CLI" --allow-empty', { cwd: this.workingDir });
+      } catch (commitErr) {
+        // May fail if nothing to commit
+      }
+    }
+
+    // Ensure main branch
+    try {
+      await execAsync('git branch -M main', { cwd: this.workingDir });
+    } catch (e) {
+      // May already be on main
+    }
+
+    // Try to pull from remote if it exists
+    try {
+      await execAsync('git pull origin main --rebase --allow-unrelated-histories', { cwd: this.workingDir });
+    } catch (e) {
+      // May fail if remote is empty or doesn't exist
+    }
   }
 
   /**
@@ -316,11 +431,31 @@ class WorkspaceManager {
     return {
       workingDir: this.workingDir,
       repoUrl: this.repoUrl,
+      cloudRunUrl: this.cloudRunUrl,
       branch: this.branch,
       isReady: this.isReady,
       currentCommit: this.isReady ? await this.getCurrentCommit() : null,
       gitStatus: this.isReady ? await this.getGitStatus() : null,
+      application: this.application ? {
+        id: this.application.id,
+        name: this.application.name,
+        slug: this.application.slug,
+      } : null,
     };
+  }
+
+  /**
+   * Get cloud run URL for testing
+   */
+  getCloudRunUrl() {
+    return this.cloudRunUrl;
+  }
+
+  /**
+   * Get application details
+   */
+  getApplication() {
+    return this.application;
   }
 }
 
