@@ -9,7 +9,7 @@ const logoutCommand = require('./commands/logout');
 const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand, completedCommand } = require('./commands/tasks');
 const { syncStartCommand, syncStopCommand, syncStatusCommand, syncNowCommand, repoCreateCommand, repoListCommand, repoCloneCommand, authCommand: gitlabAuthCommand, authStatusCommand: gitlabAuthStatusCommand, authLogoutCommand: gitlabAuthLogoutCommand } = require('./commands/gitlab');
 const { registryLoginCommand, registryImagesCommand, registryPushCommand, registryPullCommand } = require('./commands/registry');
-const { startCommand, resumeCommand, stopCommand, runsCommand } = require('./commands/orchestrator');
+const { startCommand, resumeCommand, stopCommand, runsCommand, autoCommand } = require('./commands/orchestrator');
 const config = require('./lib/config');
 const { displayStatus, printBanner } = require('./lib/display');
 
@@ -172,6 +172,18 @@ program
   .action(runsCommand);
 
 program
+  .command('auto')
+  .description('Headless automation mode for thin client / PTY integration (NDJSON output)')
+  .option('-a, --agent <agent>', 'Agent to use (claude-code, codex, gemini)', 'gemini')
+  .option('-d, --dir <directory>', 'Working directory')
+  .option('--no-mr', 'Skip merge request creation')
+  .option('-c, --continuous', 'Continuously process tasks')
+  .option('-n, --max-tasks <number>', 'Maximum tasks to process', '1')
+  .option('--task-id <id>', 'Run a specific task by ID')
+  .option('--skip-verification', 'Skip post-processing and test verification')
+  .action(autoCommand);
+
+program
   .command('logout')
   .description('Log out from GBOS services and clear credentials')
   .option('-a, --all', 'Clear all stored data including machine ID')
@@ -300,7 +312,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, start, resume, stop, runs, logout, gitlab, registry, help');
+        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, start, resume, stop, runs, auto, logout, gitlab, registry, help');
       }
     } else {
       program.outputHelp();

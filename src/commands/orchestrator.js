@@ -522,9 +522,202 @@ async function runsCommand(options) {
   console.log(`${fg(...LOGO_PURPLE)}${'─'.repeat(tableWidth)}${RESET}\n`);
 }
 
+// ==================== NDJSON Event Helpers ====================
+
+/**
+ * Emit a structured NDJSON event to stdout
+ */
+function emitEvent(event, data = {}) {
+  const payload = {
+    event,
+    ts: new Date().toISOString(),
+    ...data,
+  };
+  process.stdout.write(JSON.stringify(payload) + '\n');
+}
+
+/**
+ * Pre-check workspace in headless mode (auto-initialize, no prompts)
+ */
+async function preCheckWorkspaceHeadless(connection) {
+  const currentDir = process.cwd();
+
+  let app = connection.application;
+  if (app?.id) {
+    try {
+      const response = await api.getApplication(app.id);
+      app = response.data || response;
+    } catch (e) { /* use connection data */ }
+  }
+
+  const repoUrl = app?.gitlab_repo_url || app?.repo_url || app?.repository_url;
+
+  if (!repoUrl) {
+    return currentDir; // No repo — local-only
+  }
+
+  // Check if CWD matches the repo
+  const isMatching = await isMatchingGitRepo(currentDir, repoUrl);
+  if (isMatching) {
+    return currentDir;
+  }
+
+  // Headless: auto-initialize if empty, fail if not
+  const empty = isDirEmpty(currentDir);
+  if (!empty) {
+    throw new Error(`Directory is not empty and does not match repo ${repoUrl}. Use an empty directory or the repo root.`);
+  }
+
+  // Auto-initialize without prompting
+  return currentDir;
+}
+
+/**
+ * gbos auto - Headless automation mode for thin client / PTY integration
+ * Outputs NDJSON events to stdout for programmatic consumption
+ */
+async function autoCommand(options) {
+  // Validate auth
+  if (!config.isAuthenticated()) {
+    emitEvent('error', { message: 'Not authenticated. Run "gbos auth" first.' });
+    process.exit(1);
+  }
+
+  const connection = config.getConnection();
+  if (!connection) {
+    emitEvent('error', { message: 'Not connected. Run "gbos connect" first.' });
+    process.exit(1);
+  }
+
+  // Clear any stale runs
+  const activeRun = StateMachine.getActiveRun();
+  if (activeRun) {
+    if (activeRun.state !== STATES.COMPLETED && activeRun.state !== STATES.FAILED) {
+      activeRun.transition(STATES.FAILED, { reason: 'Cleared by auto mode' });
+    }
+  }
+
+  // Headless workspace pre-check
+  let workingDir = options.dir ? path.resolve(options.dir) : null;
+  if (!workingDir) {
+    try {
+      workingDir = await preCheckWorkspaceHeadless(connection);
+    } catch (e) {
+      emitEvent('error', { message: e.message });
+      process.exit(1);
+    }
+  }
+
+  // Check agent
+  const adapters = await checkInstalledAdapters();
+  const agentName = options.agent || 'gemini';
+  const agentInfo = adapters[agentName];
+
+  if (!agentInfo?.available) {
+    emitEvent('error', { message: `Agent "${agentName}" is not installed`, available: Object.keys(adapters).filter(k => adapters[k].available) });
+    process.exit(1);
+  }
+
+  const orchestrator = new Orchestrator({
+    agent: agentName,
+    autoApprove: true,
+    createMR: options.mr !== false,
+    continuous: options.continuous || false,
+    maxTasks: options.maxTasks ? parseInt(options.maxTasks) : 1,
+    workingDir: workingDir,
+    skipVerification: options.skipVerification || false,
+    skipGit: false, // Always commit and push in auto mode
+    taskId: options.taskId || null,
+  });
+
+  // Wire all orchestrator events to NDJSON output
+  orchestrator.on('started', ({ runId }) => {
+    emitEvent('started', {
+      runId,
+      agent: agentName,
+      agentVersion: agentInfo.version,
+      application: connection.application?.name,
+      nodeId: connection.node?.id,
+      workingDir,
+    });
+  });
+
+  orchestrator.on('stage', ({ stage }) => {
+    emitEvent('stage', { stage });
+  });
+
+  orchestrator.on('task_fetched', (task) => {
+    emitEvent('task_fetched', { task });
+  });
+
+  orchestrator.on('log', ({ message, data }) => {
+    emitEvent('log', { message, ...data });
+  });
+
+  orchestrator.on('prompt', ({ prompt }) => {
+    emitEvent('prompt', { prompt });
+  });
+
+  orchestrator.on('agent_start', ({ agent }) => {
+    emitEvent('agent_start', { agent });
+  });
+
+  orchestrator.on('agent_output', ({ data }) => {
+    emitEvent('agent_output', { data: data.toString() });
+  });
+
+  orchestrator.on('agent_done', ({ exitCode }) => {
+    emitEvent('agent_done', { exitCode });
+  });
+
+  orchestrator.on('committed', (result) => {
+    emitEvent('committed', {
+      committed: result.committed,
+      pushed: result.pushed,
+      commit: result.commit?.shortHash || null,
+      commitHash: result.commit?.hash || null,
+      branch: result.commit?.branch || null,
+      mergeRequest: result.mergeRequest?.url || null,
+      message: result.message,
+    });
+  });
+
+  orchestrator.on('completed', ({ tasksCompleted }) => {
+    emitEvent('completed', { tasksCompleted });
+  });
+
+  orchestrator.on('failed', ({ error }) => {
+    emitEvent('error', { message: error.message, stack: error.stack });
+  });
+
+  // Handle interrupts
+  process.on('SIGINT', async () => {
+    emitEvent('stopping', { reason: 'SIGINT' });
+    await orchestrator.stop();
+    emitEvent('stopped', { runId: orchestrator.stateMachine?.runId });
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    emitEvent('stopping', { reason: 'SIGTERM' });
+    await orchestrator.stop();
+    emitEvent('stopped', { runId: orchestrator.stateMachine?.runId });
+    process.exit(0);
+  });
+
+  // Start
+  try {
+    await orchestrator.start();
+  } catch (error) {
+    emitEvent('fatal', { message: error.message, stack: error.stack });
+    process.exit(1);
+  }
+}
+
 module.exports = {
   startCommand,
   resumeCommand,
   stopCommand,
   runsCommand,
+  autoCommand,
 };

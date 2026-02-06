@@ -422,6 +422,20 @@ class Orchestrator extends EventEmitter {
 
       this.log(`Fetched task: ${this.currentTask.task_key || this.currentTask.id} - ${this.currentTask.title}`);
 
+      // Emit task details for programmatic consumers (thin client)
+      this.emit('task_fetched', {
+        id: this.currentTask.id,
+        taskKey: this.currentTask.task_key,
+        title: this.currentTask.title,
+        description: this.currentTask.description,
+        acceptanceCriteria: this.currentTask.acceptance_criteria,
+        targetFiles: this.currentTask.target_files,
+        priority: this.currentTask.priority,
+        complexity: this.currentTask.complexity,
+        taskType: this.currentTask.task_type,
+        layer: this.currentTask.layer,
+      });
+
       // Update workspace for this task
       await this.workspace.initialize(this.application, this.currentTask);
       await this.workspace.prepare();
