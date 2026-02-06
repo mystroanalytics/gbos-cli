@@ -1,6 +1,7 @@
 /**
  * Session Runner
- * Manages agent process execution with PTY support
+ * Manages agent process execution - spawns CLI agents, pipes prompts,
+ * streams output in real-time, and captures results.
  */
 
 const { spawn } = require('child_process');
@@ -9,26 +10,18 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Try to load node-pty for proper terminal emulation
-let pty = null;
-try {
-  pty = require('node-pty');
-} catch (e) {
-  // node-pty not available, will fall back to spawn
-}
-
 const LOGS_DIR = path.join(os.homedir(), '.gbos', 'logs');
 
 class SessionRunner extends EventEmitter {
   constructor(options = {}) {
     super();
     this.options = {
-      timeout: options.timeout || 30 * 60 * 1000, // 30 minutes default
+      timeout: options.timeout || 30 * 60 * 1000,
       retries: options.retries || 0,
       cwd: options.cwd || process.cwd(),
       env: options.env || process.env,
-      usePty: options.usePty !== false && pty !== null,
       logToFile: options.logToFile !== false,
+      closeStdinOnWrite: options.closeStdinOnWrite || false,
       ...options,
     };
 
@@ -44,32 +37,20 @@ class SessionRunner extends EventEmitter {
     this.retryCount = 0;
   }
 
-  /**
-   * Ensure logs directory exists
-   */
   static ensureLogsDir() {
     if (!fs.existsSync(LOGS_DIR)) {
       fs.mkdirSync(LOGS_DIR, { recursive: true });
     }
   }
 
-  /**
-   * Start the session
-   * @param {string} command - Command to run
-   * @param {string[]} args - Command arguments
-   * @param {string} input - Initial input to send (prompt)
-   */
   async start(command, args = [], input = null) {
-    if (this.isRunning) {
-      throw new Error('Session is already running');
-    }
+    if (this.isRunning) throw new Error('Session is already running');
 
     this.isRunning = true;
     this.startTime = new Date();
     this.output = '';
     this.exitCode = null;
 
-    // Set up logging
     if (this.options.logToFile) {
       SessionRunner.ensureLogsDir();
       const timestamp = this.startTime.toISOString().replace(/[:.]/g, '-');
@@ -80,7 +61,6 @@ class SessionRunner extends EventEmitter {
       this.log('---');
     }
 
-    // Set up timeout
     if (this.options.timeout > 0) {
       this.timeoutHandle = setTimeout(() => {
         this.emit('timeout');
@@ -89,86 +69,23 @@ class SessionRunner extends EventEmitter {
     }
 
     try {
-      if (this.options.usePty && pty) {
-        await this.startPty(command, args, input);
-      } else {
-        await this.startSpawn(command, args, input);
-      }
+      const result = await this.runProcess(command, args, input);
+      return result;
     } catch (error) {
       this.isRunning = false;
       this.cleanup();
       throw error;
     }
-
-    return this;
   }
 
-  /**
-   * Start with PTY (proper terminal emulation)
-   */
-  async startPty(command, args, input) {
-    return new Promise((resolve, reject) => {
-      try {
-        this.process = pty.spawn(command, args, {
-          name: 'xterm-256color',
-          cols: 120,
-          rows: 40,
-          cwd: this.options.cwd,
-          env: this.options.env,
-        });
-
-        this.process.onData((data) => {
-          this.output += data;
-          this.log(data, false);
-          this.emit('data', data);
-          this.emit('stdout', data);
-        });
-
-        this.process.onExit(({ exitCode, signal }) => {
-          this.exitCode = exitCode;
-          this.endTime = new Date();
-          this.isRunning = false;
-          this.cleanup();
-          this.log(`\n--- Session ended with code ${exitCode} ---`);
-          this.emit('exit', { exitCode, signal });
-
-          if (exitCode === 0) {
-            resolve({ exitCode, output: this.output });
-          } else if (this.retryCount < this.options.retries) {
-            this.retryCount++;
-            this.emit('retry', this.retryCount);
-            this.start(command, args, input).then(resolve).catch(reject);
-          } else {
-            resolve({ exitCode, output: this.output });
-          }
-        });
-
-        // Send initial input after a brief delay
-        if (input) {
-          setTimeout(() => {
-            this.write(input + '\n');
-          }, 1000);
-        }
-
-        this.emit('started', { pid: this.process.pid });
-
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * Start with spawn (fallback)
-   */
-  async startSpawn(command, args, input) {
+  runProcess(command, args, input) {
     return new Promise((resolve, reject) => {
       try {
         this.process = spawn(command, args, {
           cwd: this.options.cwd,
-          env: this.options.env,
+          env: { ...this.options.env, FORCE_COLOR: '1' },
           stdio: ['pipe', 'pipe', 'pipe'],
-          shell: true,
+          shell: false,
         });
 
         this.process.stdout.on('data', (data) => {
@@ -188,6 +105,8 @@ class SessionRunner extends EventEmitter {
         });
 
         this.process.on('error', (error) => {
+          this.isRunning = false;
+          this.cleanup();
           this.emit('error', error);
           reject(error);
         });
@@ -197,150 +116,70 @@ class SessionRunner extends EventEmitter {
           this.endTime = new Date();
           this.isRunning = false;
           this.cleanup();
-          this.log(`\n--- Session ended with code ${exitCode} ---`);
+          this.log(`\n--- Session ended with code ${exitCode} (signal: ${signal}) ---`);
           this.emit('exit', { exitCode, signal });
 
-          if (exitCode === 0) {
-            resolve({ exitCode, output: this.output });
-          } else if (this.retryCount < this.options.retries) {
+          const result = { exitCode: exitCode || 0, output: this.output };
+          if ((exitCode === 0 || exitCode === null) || this.retryCount >= this.options.retries) {
+            resolve(result);
+          } else {
             this.retryCount++;
             this.emit('retry', this.retryCount);
             this.start(command, args, input).then(resolve).catch(reject);
-          } else {
-            resolve({ exitCode, output: this.output });
           }
         });
 
-        // Send initial input
         if (input) {
-          setTimeout(() => {
-            this.write(input + '\n');
-          }, 500);
+          this.process.stdin.write(input, () => {
+            if (this.options.closeStdinOnWrite) {
+              this.process.stdin.end();
+            }
+          });
         }
 
         this.emit('started', { pid: this.process.pid });
-
       } catch (error) {
         reject(error);
       }
     });
   }
 
-  /**
-   * Write input to the process
-   * @param {string} data - Data to write
-   */
   write(data) {
-    if (!this.isRunning || !this.process) {
-      throw new Error('Session is not running');
-    }
-
-    if (this.options.usePty && pty) {
-      this.process.write(data);
-    } else {
-      this.process.stdin.write(data);
-    }
-
+    if (!this.isRunning || !this.process) throw new Error('Session is not running');
+    this.process.stdin.write(data);
     this.emit('input', data);
   }
 
-  /**
-   * Send a special key
-   * @param {string} key - Key name (e.g., 'enter', 'ctrl-c')
-   */
-  sendKey(key) {
-    const keyMap = {
-      'enter': '\r',
-      'newline': '\n',
-      'tab': '\t',
-      'ctrl-c': '\x03',
-      'ctrl-d': '\x04',
-      'ctrl-z': '\x1a',
-      'escape': '\x1b',
-      'up': '\x1b[A',
-      'down': '\x1b[B',
-      'right': '\x1b[C',
-      'left': '\x1b[D',
-    };
-
-    const keyCode = keyMap[key.toLowerCase()];
-    if (keyCode) {
-      this.write(keyCode);
-    } else {
-      throw new Error(`Unknown key: ${key}`);
-    }
+  closeStdin() {
+    if (this.process && this.process.stdin) this.process.stdin.end();
   }
 
-  /**
-   * Stop the session gracefully
-   */
   async stop() {
-    if (!this.isRunning || !this.process) {
-      return;
-    }
-
+    if (!this.isRunning || !this.process) return;
     this.emit('stopping');
-
-    // Try graceful termination first
-    if (this.options.usePty && pty) {
-      this.process.kill('SIGTERM');
-    } else {
-      this.process.kill('SIGTERM');
-    }
-
-    // Force kill after 5 seconds
+    this.process.kill('SIGTERM');
     await new Promise((resolve) => {
       const forceKillTimeout = setTimeout(() => {
-        if (this.isRunning) {
-          this.kill();
-        }
+        if (this.isRunning) this.kill();
         resolve();
       }, 5000);
-
-      this.once('exit', () => {
-        clearTimeout(forceKillTimeout);
-        resolve();
-      });
+      this.once('exit', () => { clearTimeout(forceKillTimeout); resolve(); });
     });
   }
 
-  /**
-   * Force kill the session
-   */
   kill() {
     if (!this.process) return;
-
-    if (this.options.usePty && pty) {
-      this.process.kill('SIGKILL');
-    } else {
-      this.process.kill('SIGKILL');
-    }
-
+    this.process.kill('SIGKILL');
     this.isRunning = false;
     this.cleanup();
     this.emit('killed');
   }
 
-  /**
-   * Cleanup resources
-   */
   cleanup() {
-    if (this.timeoutHandle) {
-      clearTimeout(this.timeoutHandle);
-      this.timeoutHandle = null;
-    }
-
-    if (this.logStream) {
-      this.logStream.end();
-      this.logStream = null;
-    }
+    if (this.timeoutHandle) { clearTimeout(this.timeoutHandle); this.timeoutHandle = null; }
+    if (this.logStream) { this.logStream.end(); this.logStream = null; }
   }
 
-  /**
-   * Log a message
-   * @param {string} message
-   * @param {boolean} addTimestamp
-   */
   log(message, addTimestamp = true) {
     if (this.logStream) {
       const prefix = addTimestamp ? `[${new Date().toISOString()}] ` : '';
@@ -348,31 +187,17 @@ class SessionRunner extends EventEmitter {
     }
   }
 
-  /**
-   * Get session status
-   */
   getStatus() {
     return {
-      isRunning: this.isRunning,
-      exitCode: this.exitCode,
-      startTime: this.startTime,
-      endTime: this.endTime,
-      duration: this.endTime && this.startTime
-        ? this.endTime - this.startTime
-        : (this.startTime ? Date.now() - this.startTime : 0),
-      retryCount: this.retryCount,
-      logFile: this.logFile,
-      outputLength: this.output.length,
+      isRunning: this.isRunning, exitCode: this.exitCode,
+      startTime: this.startTime, endTime: this.endTime,
+      duration: this.endTime && this.startTime ? this.endTime - this.startTime : (this.startTime ? Date.now() - this.startTime : 0),
+      retryCount: this.retryCount, logFile: this.logFile, outputLength: this.output.length,
     };
   }
 
-  /**
-   * Get recent output
-   * @param {number} lines - Number of lines to return
-   */
   getRecentOutput(lines = 50) {
-    const allLines = this.output.split('\n');
-    return allLines.slice(-lines).join('\n');
+    return this.output.split('\n').slice(-lines).join('\n');
   }
 }
 

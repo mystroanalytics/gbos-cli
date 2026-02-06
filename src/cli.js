@@ -146,6 +146,8 @@ program
   .option('-c, --continuous', 'Continuously process tasks')
   .option('-n, --max-tasks <number>', 'Maximum tasks to process', '1')
   .option('--show-prompt', 'Show the generated prompt')
+  .option('--skip-verification', 'Skip post-processing and test verification')
+  .option('--skip-git', 'Skip git commit and push')
   .action(startCommand);
 
 program
