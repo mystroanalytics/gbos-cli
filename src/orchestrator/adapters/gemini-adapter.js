@@ -40,7 +40,10 @@ class GeminiAdapter extends BaseAdapter {
     const args = ['-p']; // Print mode: reads from stdin, outputs result, exits
 
     if (options.autoApprove) args.push('--yolo');
-    if (options.model) args.push('--model', options.model);
+
+    // Default to Gemini 3 Pro
+    const model = options.model || 'gemini-3-pro-preview';
+    args.push('--model', model);
 
     return {
       command: 'gemini',
