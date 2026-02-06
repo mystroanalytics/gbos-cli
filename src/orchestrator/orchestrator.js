@@ -36,6 +36,7 @@ class Orchestrator extends EventEmitter {
 
     this.currentTask = null;
     this.application = null;
+    this.agentKeys = {}; // API keys fetched from server at runtime
     this.tasksCompleted = 0;
     this.isRunning = false;
     this.isPaused = false;
@@ -182,6 +183,16 @@ class Orchestrator extends EventEmitter {
       }
     }
 
+    // Fetch agent API keys from server
+    const effectiveAppId = this.application?.id || this.stateMachine.context.appId;
+    if (effectiveAppId) {
+      try {
+        this.agentKeys = await api.getAgentConfig(effectiveAppId);
+      } catch (e) {
+        // No server-side keys
+      }
+    }
+
     // Start status updates
     this.startStatusUpdates();
   }
@@ -323,6 +334,18 @@ class Orchestrator extends EventEmitter {
     this.adapter = getAdapter(this.options.agent);
     this.log(`Using agent: ${this.adapter.name} (${agentInfo.version})`);
 
+    // Fetch agent API keys from GBOS server (never stored locally)
+    if (this.application?.id) {
+      try {
+        this.agentKeys = await api.getAgentConfig(this.application.id);
+        if (this.agentKeys && Object.keys(this.agentKeys).length > 0) {
+          this.log('Agent API keys loaded from server');
+        }
+      } catch (e) {
+        this.log('No server-side agent keys configured');
+      }
+    }
+
     this.stateMachine.transition(STATES.AUTH_CONFIG, {
       appId: this.application?.id,
       nodeId: connection.node?.id,
@@ -462,10 +485,12 @@ class Orchestrator extends EventEmitter {
       throw new Error('No prompt generated');
     }
 
-    // Get command to run
+    // Get command to run (pass server-side API key for the agent)
+    const agentKey = this.agentKeys?.[this.adapter.name] || null;
     const cmdConfig = this.adapter.getCommand({
       nonInteractive: this.adapter.supportsNonInteractive,
       autoApprove: this.options.autoApprove,
+      apiKey: agentKey,
     });
 
     // Create session runner - agent works at repo root

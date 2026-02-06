@@ -1,6 +1,7 @@
 /**
  * Gemini Agent Adapter
- * Adapter for Google's Gemini CLI
+ * Uses `gemini -p` (print mode) which reads prompt from stdin,
+ * runs autonomously, streams output, and exits when done.
  */
 
 const BaseAdapter = require('./base-adapter');
@@ -36,42 +37,32 @@ class GeminiAdapter extends BaseAdapter {
   }
 
   getCommand(options = {}) {
-    const args = [];
+    const args = ['-p']; // Print mode: reads from stdin, outputs result, exits
 
-    // Sandbox mode for auto-approval
-    if (options.autoApprove) {
-      args.push('--sandbox');
-    }
-
-    // Yolo mode (no confirmations)
-    if (options.yolo) {
-      args.push('--yolo');
-    }
+    if (options.autoApprove) args.push('--yolo');
+    if (options.model) args.push('--model', options.model);
 
     return {
       command: 'gemini',
       args,
       env: {
         ...process.env,
-        GOOGLE_API_KEY: options.apiKey || process.env.GOOGLE_API_KEY,
-        GEMINI_API_KEY: options.apiKey || process.env.GEMINI_API_KEY,
+        GEMINI_API_KEY: options.apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
       },
+      closeStdinOnWrite: true,
     };
   }
 
   formatPrompt(task, context = {}) {
     const lines = [];
 
-    // Simple, direct format for Gemini
     lines.push(`# ${task.title || task.name || 'Task'}`);
     lines.push('');
 
-    // Task reference
     lines.push(`> Task: ${task.task_key || task.id}`);
     if (task.priority) lines.push(`> Priority: ${task.priority}`);
     lines.push('');
 
-    // Main instructions
     lines.push('## Instructions');
     lines.push('');
     if (task.agent_prompt) {
@@ -83,7 +74,6 @@ class GeminiAdapter extends BaseAdapter {
     }
     lines.push('');
 
-    // Requirements
     if (task.acceptance_criteria && task.acceptance_criteria.length > 0) {
       lines.push('## Requirements');
       task.acceptance_criteria.forEach((c, i) => {
@@ -92,14 +82,12 @@ class GeminiAdapter extends BaseAdapter {
       lines.push('');
     }
 
-    // Files to modify
     if (task.target_files && task.target_files.length > 0) {
       lines.push('## Files');
       task.target_files.forEach(f => lines.push(`- \`${f}\``));
       lines.push('');
     }
 
-    // Testing
     lines.push('## Testing');
     lines.push('');
     if (context.cloudRunUrl) {
@@ -119,12 +107,18 @@ class GeminiAdapter extends BaseAdapter {
     }
     lines.push('');
 
-    // Important notes
     lines.push('## Important');
     lines.push('- Do NOT commit or push changes');
     lines.push('- Ensure all tests pass');
     lines.push('- The orchestrator handles git operations');
     lines.push('');
+
+    if (context.repoUrl) {
+      lines.push('## Repository');
+      lines.push(`- **URL:** ${context.repoUrl}`);
+      lines.push(`- **Branch:** ${context.branch || 'main'}`);
+      lines.push('');
+    }
 
     return lines.join('\n');
   }
@@ -136,8 +130,22 @@ class GeminiAdapter extends BaseAdapter {
       /done implementing/i,
       /finished the task/i,
       /implementation complete/i,
+      /I've completed/i,
+      /all tests pass/i,
+      /ready for review/i,
+      /I have completed/i,
     ];
     return patterns.some(p => p.test(output)) || super.detectCompletion(output);
+  }
+
+  detectWaitingForInput(output) {
+    const patterns = [
+      /Do you want me to/i,
+      /Should I/i,
+      /Would you like me to/i,
+      /Shall I/i,
+    ];
+    return patterns.some(p => p.test(output)) || super.detectWaitingForInput(output);
   }
 }
 

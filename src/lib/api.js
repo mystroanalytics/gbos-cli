@@ -193,6 +193,13 @@ class GbosApiClient {
     });
   }
 
+  // Agent config - fetch API keys from application settings
+  async getAgentConfig(applicationId) {
+    const app = await this.getApplication(applicationId);
+    const appData = app.data || app;
+    return appData?.settings?.agent_keys || {};
+  }
+
   // Activity logging
   async logActivity(activity) {
     return this.request('/cli/activity', {
