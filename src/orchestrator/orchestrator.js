@@ -277,14 +277,22 @@ class Orchestrator extends EventEmitter {
     const placeholderTask = { id: 'setup', title: 'setup', task_key: 'SETUP' };
     await this.workspace.initialize(this.application, placeholderTask);
 
+    // Get cloud run URL from workspace manager (fetched from API)
+    const cloudRunUrl = this.workspace.getCloudRunUrl();
+
     this.stateMachine.transition(STATES.WORKSPACE_READY, {
       workingDir: this.workspace.workingDir,
       repoUrl: this.workspace.repoUrl,
-      cloudRunUrl: this.application.cloud_run_url || this.application.deploy_url,
+      cloudRunUrl: cloudRunUrl,
     });
 
     // Save cloud run URL for later use
-    this.stateMachine.context.cloudRunUrl = this.application.cloud_run_url || this.application.deploy_url;
+    this.stateMachine.context.cloudRunUrl = cloudRunUrl;
+
+    this.log(`Repo URL: ${this.workspace.repoUrl}`);
+    if (cloudRunUrl) {
+      this.log(`Cloud Run URL: ${cloudRunUrl}`);
+    }
   }
 
   /**
