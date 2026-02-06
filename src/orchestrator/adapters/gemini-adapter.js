@@ -37,7 +37,9 @@ class GeminiAdapter extends BaseAdapter {
   }
 
   getCommand(options = {}) {
-    const args = ['-p']; // Print mode: reads from stdin, outputs result, exits
+    // Gemini CLI reads prompt from stdin when piped.
+    // Use --output-format text for clean non-interactive output.
+    const args = ['--output-format', 'text'];
 
     if (options.autoApprove) args.push('--yolo');
 
