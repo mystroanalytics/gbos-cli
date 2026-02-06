@@ -621,10 +621,11 @@ async function autoCommand(options) {
   const orchestrator = new Orchestrator({
     agent: agentName,
     autoApprove: true,
-    createMR: options.mr !== false,
+    createMR: options.mr === true, // No MR by default in auto mode — push directly to branch
     continuous: options.continuous || false,
     maxTasks: options.maxTasks ? parseInt(options.maxTasks) : 1,
     workingDir: workingDir,
+    branch: options.branch || 'main', // Push to main by default for CI/CD auto-deploy
     skipVerification: options.skipVerification || false,
     skipGit: false, // Always commit and push in auto mode
     taskId: options.taskId || null,

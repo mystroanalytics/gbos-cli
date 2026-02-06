@@ -369,6 +369,7 @@ class Orchestrator extends EventEmitter {
 
     this.workspace = new WorkspaceManager({
       workingDir: this.options.workingDir,
+      branch: this.options.branch || null,
     });
 
     // Initialize with a placeholder task for branch creation
