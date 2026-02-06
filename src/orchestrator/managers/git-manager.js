@@ -257,6 +257,30 @@ class GitManager {
   }
 
   /**
+   * Commit only (no push) - for local-only workspaces
+   */
+  async commitOnly(message, task = null) {
+    const status = await this.stageAll();
+
+    if (!status.hasChanges) {
+      return {
+        committed: false,
+        pushed: false,
+        message: 'No changes to commit',
+      };
+    }
+
+    const commit = await this.commit(message, task);
+
+    return {
+      committed: true,
+      pushed: false,
+      commit,
+      message: `Committed locally: ${commit.shortHash}`,
+    };
+  }
+
+  /**
    * Full commit and push workflow
    */
   async commitAndPush(message, task = null) {

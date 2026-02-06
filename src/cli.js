@@ -148,6 +148,7 @@ program
   .option('--show-prompt', 'Show the generated prompt')
   .option('--skip-verification', 'Skip post-processing and test verification')
   .option('--skip-git', 'Skip git commit and push')
+  .option('--task-id <id>', 'Run a specific task by ID')
   .action(startCommand);
 
 program

@@ -97,6 +97,7 @@ async function startCommand(options) {
     workingDir: options.dir ? path.resolve(options.dir) : null,
     skipVerification: options.skipVerification || false,
     skipGit: options.skipGit || false,
+    taskId: options.taskId || null,
   });
 
   // Track active spinner

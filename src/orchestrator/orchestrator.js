@@ -331,8 +331,16 @@ class Orchestrator extends EventEmitter {
     this.emit('stage', { stage: 'fetch_task' });
 
     try {
-      const response = await api.getNextTask(true);
-      this.currentTask = response.data?.task || response.data;
+      let response;
+      if (this.options.taskId) {
+        // Fetch a specific task by ID
+        response = await api.request(`/development-tasks/${this.options.taskId}`, { method: 'GET' });
+        this.currentTask = response.data;
+        this.options.taskId = null; // Only use once, then fall back to getNextTask
+      } else {
+        response = await api.getNextTask(true);
+        this.currentTask = response.data?.task || response.data;
+      }
 
       if (!this.currentTask) {
         this.log('No tasks available');
