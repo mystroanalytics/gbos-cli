@@ -446,9 +446,15 @@ class Orchestrator extends EventEmitter {
           method: 'PATCH',
           body: { status: 'in_progress' },
         });
+        this.emit('task_status', { taskId: this.currentTask.id, taskKey: this.currentTask.task_key, status: 'in_progress' });
       } catch (e) {
         // Fall back to the /start endpoint
-        await api.startTask(this.currentTask.id);
+        try {
+          await api.startTask(this.currentTask.id);
+          this.emit('task_status', { taskId: this.currentTask.id, taskKey: this.currentTask.task_key, status: 'in_progress' });
+        } catch (e2) {
+          this.log(`Failed to set task in_progress: ${e2.message}`);
+        }
       }
 
       this.stateMachine.transition(STATES.FETCH_TASK, {
@@ -661,6 +667,7 @@ class Orchestrator extends EventEmitter {
         },
       });
 
+      this.emit('task_status', { taskId: this.currentTask.id, taskKey: this.currentTask.task_key, status: 'review' });
       this.log(`Task ${this.currentTask.task_key || this.currentTask.id} set to review`);
 
     } catch (error) {

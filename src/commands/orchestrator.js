@@ -650,6 +650,10 @@ async function autoCommand(options) {
     emitEvent('task_fetched', { task });
   });
 
+  orchestrator.on('task_status', ({ taskId, taskKey, status }) => {
+    emitEvent('task_status', { taskId, taskKey, status });
+  });
+
   orchestrator.on('log', ({ message, data }) => {
     emitEvent('log', { message, ...data });
   });
