@@ -418,9 +418,9 @@ class Orchestrator extends EventEmitter {
       autoApprove: this.options.autoApprove,
     });
 
-    // Create session runner - agent works in codebase/ subdirectory
+    // Create session runner - agent works at repo root
     this.session = new SessionRunner({
-      cwd: this.workspace.getCodebaseDir(),
+      cwd: this.workspace.workingDir,
       env: this.workspace.getEnvironment(cmdConfig.env),
       timeout: 30 * 60 * 1000, // 30 minutes
       closeStdinOnWrite: cmdConfig.closeStdinOnWrite || false,
