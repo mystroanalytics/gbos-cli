@@ -426,8 +426,16 @@ class Orchestrator extends EventEmitter {
       await this.workspace.initialize(this.application, this.currentTask);
       await this.workspace.prepare();
 
-      // Start task
-      await api.startTask(this.currentTask.id);
+      // Set task status to in_progress
+      try {
+        await api.request(`/development-tasks/${this.currentTask.id}/status`, {
+          method: 'PATCH',
+          body: { status: 'in_progress' },
+        });
+      } catch (e) {
+        // Fall back to the /start endpoint
+        await api.startTask(this.currentTask.id);
+      }
 
       this.stateMachine.transition(STATES.FETCH_TASK, {
         taskId: this.currentTask.id,
@@ -627,14 +635,19 @@ class Orchestrator extends EventEmitter {
       const gitResult = this.stateMachine.context.outputs?.git?.output;
       const testResult = this.stateMachine.context.outputs?.tests?.output;
 
-      await api.completeTask(this.currentTask.id, {
-        completion_notes: `Task completed by GBOS orchestrator using ${this.adapter.name}`,
-        commit_hash: gitResult?.commit?.hash,
-        merge_request_url: gitResult?.mergeRequest?.url,
-        tests_passed: testResult?.overall?.passed,
+      // Set task status to "review" (not "completed") so it can be reviewed
+      await api.request(`/development-tasks/${this.currentTask.id}/status`, {
+        method: 'PATCH',
+        body: {
+          status: 'review',
+          completion_notes: `Task completed by GBOS orchestrator using ${this.adapter.name}`,
+          commit_hash: gitResult?.commit?.hash,
+          merge_request_url: gitResult?.mergeRequest?.url,
+          tests_passed: testResult?.overall?.passed,
+        },
       });
 
-      this.log(`Task ${this.currentTask.task_key || this.currentTask.id} marked as complete`);
+      this.log(`Task ${this.currentTask.task_key || this.currentTask.id} set to review`);
 
     } catch (error) {
       this.log(`Failed to report status: ${error.message}`);
