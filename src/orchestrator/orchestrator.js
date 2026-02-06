@@ -619,13 +619,16 @@ class Orchestrator extends EventEmitter {
 
     const message = `Complete task: ${this.currentTask.title || this.currentTask.task_key || this.currentTask.id}`;
 
+    // Check if working directory has a git remote (even if app has no repo URL configured)
+    const hasRemote = this.workspace.hasRepo || !!(await this.git.getRemoteUrl());
+
     let result;
-    if (this.workspace.hasRepo && this.options.createMR) {
+    if (hasRemote && this.options.createMR) {
       result = await this.git.commitPushAndMR(message, this.currentTask);
-    } else if (this.workspace.hasRepo) {
+    } else if (hasRemote) {
       result = await this.git.commitAndPush(message, this.currentTask);
     } else {
-      // Local-only: just commit, no push
+      // No remote at all: just commit locally
       result = await this.git.commitOnly(message);
     }
 
