@@ -12,6 +12,12 @@ This ensures all work is continuously saved to the GitHub repository.
 
 ---
 
+# Versioning
+
+The next 1000 version updates should increment from 1.4.1 to 1.4.1000 (i.e. 1.4.2, 1.4.3, ... 1.4.1000) unless the user states otherwise. Do not bump the minor or major version.
+
+---
+
 # GBOS Integration
 
 This project uses GBOS for task management.
