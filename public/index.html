@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="dashboard" id="dashboard">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__logo">
+        <span class="sidebar__logo-icon">G</span>
+        <span class="sidebar__logo-text">GBOS</span>
+      </div>
+      <nav class="sidebar__nav" id="sidebar-nav">
+        <a href="#" class="sidebar__link sidebar__link--active" data-section="overview">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+          <span>Overview</span>
+        </a>
+        <a href="#" class="sidebar__link" data-section="migrations">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>Migrations</span>
+        </a>
+        <a href="#" class="sidebar__link" data-section="data">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+          <span>Data Sources</span>
+        </a>
+        <a href="#" class="sidebar__link" data-section="reports">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          <span>Reports</span>
+        </a>
+        <a href="#" class="sidebar__link" data-section="settings">
+          <svg class="sidebar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="header">
+        <button class="header__menu-btn" id="menu-toggle" aria-label="Toggle sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <h1 class="header__title">Dashboard</h1>
+        <div class="header__actions">
+          <span class="header__status header__status--connected">Connected</span>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="grid grid--stats" id="stats-grid">
+          <div class="card card--stat" data-stat="total-records">
+            <div class="card__header">
+              <span class="card__label">Total Records</span>
+              <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+            </div>
+            <p class="card__value" id="stat-total-records">0</p>
+            <p class="card__change card__change--up">--</p>
+          </div>
+          <div class="card card--stat" data-stat="migrated">
+            <div class="card__header">
+              <span class="card__label">Migrated</span>
+              <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <p class="card__value" id="stat-migrated">0</p>
+            <p class="card__change card__change--up">--</p>
+          </div>
+          <div class="card card--stat" data-stat="pending">
+            <div class="card__header">
+              <span class="card__label">Pending</span>
+              <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </div>
+            <p class="card__value" id="stat-pending">0</p>
+            <p class="card__change">--</p>
+          </div>
+          <div class="card card--stat" data-stat="errors">
+            <div class="card__header">
+              <span class="card__label">Errors</span>
+              <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+            </div>
+            <p class="card__value" id="stat-errors">0</p>
+            <p class="card__change card__change--down">--</p>
+          </div>
+        </div>
+
+        <div class="grid grid--main" id="main-grid">
+          <div class="card card--chart" id="migration-progress-card">
+            <div class="card__header">
+              <h2 class="card__title">Migration Progress</h2>
+            </div>
+            <div class="card__body">
+              <div class="progress-bars" id="progress-bars"></div>
+            </div>
+          </div>
+
+          <div class="card card--activity" id="activity-card">
+            <div class="card__header">
+              <h2 class="card__title">Recent Activity</h2>
+            </div>
+            <div class="card__body">
+              <ul class="activity-list" id="activity-list"></ul>
+            </div>
+          </div>
+
+          <div class="card card--sources" id="sources-card">
+            <div class="card__header">
+              <h2 class="card__title">Data Sources</h2>
+            </div>
+            <div class="card__body">
+              <ul class="source-list" id="source-list"></ul>
+            </div>
+          </div>
+
+          <div class="card card--quality" id="quality-card">
+            <div class="card__header">
+              <h2 class="card__title">Data Quality</h2>
+            </div>
+            <div class="card__body">
+              <div class="quality-meter" id="quality-meter">
+                <div class="quality-meter__ring">
+                  <svg viewBox="0 0 120 120" class="quality-meter__svg">
+                    <circle cx="60" cy="60" r="52" class="quality-meter__bg"></circle>
+                    <circle cx="60" cy="60" r="52" class="quality-meter__fill" id="quality-fill"></circle>
+                  </svg>
+                  <span class="quality-meter__value" id="quality-value">--%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/utils/dom.js"></script>
+  <script src="js/services/data-service.js"></script>
+  <script src="js/components/sparkline.js"></script>
+  <script src="js/components/bar-chart.js"></script>
+  <script src="js/components/line-chart.js"></script>
+  <script src="js/components/donut-chart.js"></script>
+  <script src="js/components/progress-ring.js"></script>
+  <script src="js/components/dashboard.js"></script>
+</body>
+</html>
