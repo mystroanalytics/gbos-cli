@@ -4,6 +4,7 @@ const { Command } = require('commander');
 const program = new Command();
 
 const authCommand = require('./commands/auth');
+const authTokenCommand = require('./commands/auth-token');
 const connectCommand = require('./commands/connect');
 const logoutCommand = require('./commands/logout');
 const { tasksCommand, nextTaskCommand, continueCommand, fallbackCommand, addTaskCommand, completedCommand } = require('./commands/tasks');
@@ -26,6 +27,16 @@ program
   .option('-e, --email <email>', 'Email address for authentication')
   .option('-f, --force', 'Force re-authentication even if already authenticated')
   .action(authCommand);
+
+program
+  .command('auth-token')
+  .description('Authenticate with a pre-obtained access token (for thin clients and programmatic use)')
+  .requiredOption('-t, --token <token>', 'GBOS access token obtained from UI authentication')
+  .option('--node-id <nodeId>', 'Auto-connect to a specific node after authentication')
+  .option('-d, --dir <directory>', 'Working directory (defaults to current directory)')
+  .option('-a, --agent <agent>', 'Agent CLI being used (default: claude-code)')
+  .option('--json', 'Output result as JSON (for programmatic consumption)')
+  .action(authTokenCommand);
 
 program
   .command('connect')
@@ -313,7 +324,7 @@ program
         cmd.outputHelp();
       } else {
         console.log(`Unknown command: ${command}`);
-        console.log('Available commands: auth, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, start, resume, stop, runs, auto, logout, gitlab, registry, help');
+        console.log('Available commands: auth, auth-token, connect, disconnect, status, tasks, next, continue, completed, fallback, add_task, start, resume, stop, runs, auto, logout, gitlab, registry, help');
       }
     } else {
       program.outputHelp();
