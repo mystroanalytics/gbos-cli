@@ -1,6 +1,6 @@
 {
   "name": "gbos",
-  "version": "1.4.19",
+  "version": "1.4.20",
   "description": "CLI and orchestrator for the Generative Business Operating System (GBOS) — connect AI coding agents (Claude, Gemini, Codex) to managed development workflows with task automation, GitLab sync, and NDJSON event streaming for thin client integration",
   "main": "src/index.js",
   "bin": {
