@@ -262,7 +262,7 @@ gbos auth --force
 
 - **GBOS Platform**: [https://gbos.io](https://gbos.io)
 - **API Documentation**: [https://api.gbos.io/docs](https://api.gbos.io/docs)
-- **Issues**: [https://github.com/mystroanalytics/gbos-node-local/issues](https://github.com/mystroanalytics/gbos-node-local/issues)
+- **Issues**: [https://github.com/mystroanalytics/gbos-cli/issues](https://github.com/mystroanalytics/gbos-cli/issues)
 
 ## License
 

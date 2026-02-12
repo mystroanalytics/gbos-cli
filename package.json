@@ -1,6 +1,6 @@
 {
   "name": "gbos",
-  "version": "1.4.20",
+  "version": "1.4.21",
   "description": "CLI and orchestrator for the Generative Business Operating System (GBOS) — connect AI coding agents (Claude, Gemini, Codex) to managed development workflows with task automation, GitLab sync, and NDJSON event streaming for thin client integration",
   "main": "src/index.js",
   "bin": {
@@ -34,12 +34,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mystroanalytics/gbos-node-local.git"
+    "url": "git+https://github.com/mystroanalytics/gbos-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/mystroanalytics/gbos-node-local/issues"
+    "url": "https://github.com/mystroanalytics/gbos-cli/issues"
   },
-  "homepage": "https://github.com/mystroanalytics/gbos-node-local#readme",
+  "homepage": "https://github.com/mystroanalytics/gbos-cli#readme",
   "files": [
     "src/**/*",
     "images/**/*"
