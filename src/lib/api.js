@@ -4,7 +4,6 @@ const config = require('./config');
 const DEFAULT_API_URL = 'https://api.gbos.io/api/v1';
 
 // Support GBOS_API_URL env var for backwards compatibility or custom endpoints
-// e.g., GBOS_API_URL=https://REDACTED/api/v1
 const API_BASE_URL = process.env.GBOS_API_URL || DEFAULT_API_URL;
 
 class GbosApiClient {
